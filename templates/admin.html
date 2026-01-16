@@ -747,7 +747,7 @@
         
         // Initialize admin map
         function initAdminMap() {
-            const defaultCenter = { lat: 28.6139, lng: 77.2090 }; // Delhi, India
+            const defaultCenter = { lat: 28.6139, lng: 77.2090 }; // Delhi, India (fallback)
             
             adminMap = new google.maps.Map(document.getElementById('admin-map'), {
                 center: defaultCenter,
@@ -762,8 +762,34 @@
             
             adminInfoWindow = new google.maps.InfoWindow();
             
-            // Add markers for current reports
-            updateAdminMapMarkers();
+            // Try to get user's current location
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        const userLocation = {
+                            lat: position.coords.latitude,
+                            lng: position.coords.longitude
+                        };
+                        adminMap.setCenter(userLocation);
+                        adminMap.setZoom(13);
+                        // Update markers after centering on user location
+                        updateAdminMapMarkers();
+                    },
+                    (error) => {
+                        console.log('Geolocation error:', error.message);
+                        // Fall back to default center, markers will handle bounds
+                        updateAdminMapMarkers();
+                    },
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 5000,
+                        maximumAge: 300000 // Cache position for 5 minutes
+                    }
+                );
+            } else {
+                // Geolocation not supported, use default
+                updateAdminMapMarkers();
+            }
         }
         
         // Update markers on the admin map
