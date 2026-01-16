@@ -20,13 +20,14 @@ def create_app() -> Flask:
     if DOTENV_AVAILABLE:
         load_dotenv()
 
-    # Get the base directory - works both locally and on Vercel
-    base_dir = Path(__file__).parent.absolute()
+    # Get the base directory - use APP_BASE_DIR env var if set (Vercel), otherwise use file location
+    base_dir = Path(os.environ.get('APP_BASE_DIR', Path(__file__).parent.absolute()))
     
     app = Flask(
         __name__,
         static_folder=str(base_dir / "static"),
-        template_folder=str(base_dir / "templates")
+        template_folder=str(base_dir / "templates"),
+        static_url_path='/static'
     )
 
     # Basic configuration
