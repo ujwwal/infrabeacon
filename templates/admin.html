@@ -304,6 +304,99 @@
             animation: spin 1s linear infinite;
             margin: 0 auto;
         }
+        
+        /* View Toggle */
+        .view-toggle {
+            display: flex;
+            background: #f0f0f0;
+            border-radius: 8px;
+            padding: 4px;
+            gap: 4px;
+        }
+        
+        .view-toggle-btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            background: transparent;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        
+        .view-toggle-btn.active {
+            background: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        /* Admin Map */
+        .admin-map-container {
+            display: none;
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            height: 500px;
+            position: relative;
+        }
+        
+        .admin-map-container.active {
+            display: block;
+        }
+        
+        #admin-map {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .map-info-window {
+            max-width: 280px;
+            padding: 8px;
+        }
+        
+        .map-info-window img {
+            width: 100%;
+            max-height: 150px;
+            object-fit: cover;
+            border-radius: 8px;
+            margin-bottom: 8px;
+        }
+        
+        .map-info-window h4 {
+            margin: 0 0 4px;
+            font-size: 14px;
+        }
+        
+        .map-info-window p {
+            margin: 0 0 8px;
+            font-size: 12px;
+            color: #666;
+        }
+        
+        .map-info-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        
+        .map-info-actions button {
+            flex: 1;
+            padding: 6px 10px;
+            border: none;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        
+        .map-info-actions .btn-verify {
+            background: #fff8e1;
+            color: #f57f17;
+        }
+        
+        .map-info-actions .btn-resolve {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
     </style>
 </head>
 <body class="admin-page">
@@ -353,6 +446,15 @@
     <div class="content-section">
         <!-- Filters -->
         <div class="filter-bar">
+            <div class="view-toggle">
+                <button class="view-toggle-btn active" onclick="switchView('list')" id="btn-list-view">
+                    📋 List
+                </button>
+                <button class="view-toggle-btn" onclick="switchView('map')" id="btn-map-view">
+                    🗺️ Map
+                </button>
+            </div>
+            
             <select id="filter-status" onchange="applyFilters()">
                 <option value="">All Statuses</option>
                 <option value="new">🔴 New</option>
@@ -376,9 +478,14 @@
                 <option value="low">🟢 Low</option>
             </select>
         </div>
+        
+        <!-- Map View -->
+        <div class="admin-map-container" id="map-view">
+            <div id="admin-map"></div>
+        </div>
 
-        <!-- Reports Table -->
-        <div class="reports-table">
+        <!-- Reports Table (List View) -->
+        <div class="reports-table" id="list-view">
             <div class="table-header">
                 <span>Image</span>
                 <span>Details</span>
@@ -429,40 +536,6 @@
                 }
             } catch (error) {
                 console.error('Failed to load stats:', error);
-            }
-        }
-        
-        // Load reports
-        async function loadReports() {
-            const container = document.getElementById('reports-container');
-            
-            try {
-                const status = document.getElementById('filter-status').value;
-                const type = document.getElementById('filter-type').value;
-                const severity = document.getElementById('filter-severity').value;
-                
-                let url = '/admin/api/reports?';
-                if (status) url += `status=${status}&`;
-                if (type) url += `issue_type=${type}&`;
-                if (severity) url += `severity=${severity}&`;
-                
-                const response = await fetch(url);
-                const data = await response.json();
-                
-                if (data.success) {
-                    reports = data.reports;
-                    renderReports();
-                } else {
-                    throw new Error(data.error);
-                }
-            } catch (error) {
-                console.error('Failed to load reports:', error);
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <span class="emoji-icon">❌</span>
-                        <p>Failed to load reports</p>
-                    </div>
-                `;
             }
         }
         
@@ -644,6 +717,198 @@
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') closeImageModal();
         });
+        
+        // ========== MAP VIEW FUNCTIONALITY ==========
+        let adminMap = null;
+        let adminMarkers = [];
+        let adminInfoWindow = null;
+        let currentView = 'list';
+        
+        // Switch between list and map view
+        function switchView(view) {
+            currentView = view;
+            
+            // Update toggle buttons
+            document.getElementById('btn-list-view').classList.toggle('active', view === 'list');
+            document.getElementById('btn-map-view').classList.toggle('active', view === 'map');
+            
+            // Show/hide containers
+            document.getElementById('list-view').style.display = view === 'list' ? 'block' : 'none';
+            document.getElementById('map-view').classList.toggle('active', view === 'map');
+            
+            // Initialize map if switching to map view
+            if (view === 'map' && !adminMap) {
+                initAdminMap();
+            } else if (view === 'map' && adminMap) {
+                // Refresh markers when switching to map
+                updateAdminMapMarkers();
+            }
+        }
+        
+        // Initialize admin map
+        function initAdminMap() {
+            const defaultCenter = { lat: 28.6139, lng: 77.2090 }; // Delhi, India
+            
+            adminMap = new google.maps.Map(document.getElementById('admin-map'), {
+                center: defaultCenter,
+                zoom: 12,
+                styles: [
+                    { featureType: 'poi', elementType: 'labels', stylers: [{ visibility: 'off' }] }
+                ],
+                mapTypeControl: true,
+                fullscreenControl: true,
+                streetViewControl: false
+            });
+            
+            adminInfoWindow = new google.maps.InfoWindow();
+            
+            // Add markers for current reports
+            updateAdminMapMarkers();
+        }
+        
+        // Update markers on the admin map
+        function updateAdminMapMarkers() {
+            if (!adminMap) return;
+            
+            // Clear existing markers
+            adminMarkers.forEach(marker => marker.setMap(null));
+            adminMarkers = [];
+            
+            const issueTypes = {
+                'pothole': '🕳️ Pothole',
+                'broken_light': '💡 Broken Light',
+                'garbage': '🗑️ Garbage',
+                'waterlogging': '🌊 Waterlogging',
+                'other': '⚠️ Other'
+            };
+            
+            const statusColors = {
+                'new': '#dc3545',
+                'verified': '#ffc107',
+                'resolved': '#28a745'
+            };
+            
+            const bounds = new google.maps.LatLngBounds();
+            
+            reports.forEach(report => {
+                if (!report.latitude || !report.longitude) return;
+                
+                const position = { lat: report.latitude, lng: report.longitude };
+                const markerColor = statusColors[report.status] || '#dc3545';
+                
+                const marker = new google.maps.Marker({
+                    position: position,
+                    map: adminMap,
+                    title: issueTypes[report.issue_type] || report.issue_type,
+                    icon: {
+                        path: google.maps.SymbolPath.CIRCLE,
+                        scale: 12,
+                        fillColor: markerColor,
+                        fillOpacity: 0.9,
+                        strokeColor: '#fff',
+                        strokeWeight: 2
+                    }
+                });
+                
+                marker.addListener('click', () => {
+                    showAdminInfoWindow(marker, report);
+                });
+                
+                adminMarkers.push(marker);
+                bounds.extend(position);
+            });
+            
+            // Fit map to show all markers
+            if (adminMarkers.length > 0) {
+                adminMap.fitBounds(bounds);
+                // Don't zoom in too far
+                const listener = google.maps.event.addListener(adminMap, 'idle', () => {
+                    if (adminMap.getZoom() > 16) adminMap.setZoom(16);
+                    google.maps.event.removeListener(listener);
+                });
+            }
+        }
+        
+        // Show info window for admin map marker
+        function showAdminInfoWindow(marker, report) {
+            const issueTypes = {
+                'pothole': '🕳️ Pothole',
+                'broken_light': '💡 Broken Light',
+                'garbage': '🗑️ Garbage',
+                'waterlogging': '🌊 Waterlogging',
+                'other': '⚠️ Other'
+            };
+            
+            const content = `
+                <div class="map-info-window">
+                    ${report.image_url ? `<img src="${report.image_url}" alt="Issue" onerror="this.style.display='none'">` : ''}
+                    <h4>${issueTypes[report.issue_type] || report.issue_type}</h4>
+                    <p>${report.description || 'No description'}</p>
+                    <p><strong>Status:</strong> ${formatStatus(report.status)}</p>
+                    <p><strong>Severity:</strong> ${report.severity?.toUpperCase() || 'MEDIUM'}</p>
+                    <p style="font-size: 11px; color: #999;">
+                        ${formatDate(report.created_at)}
+                    </p>
+                    <div class="map-info-actions">
+                        ${report.status !== 'verified' ? `
+                            <button class="btn-verify" onclick="verifyReport('${report.id}')">✓ Verify</button>
+                        ` : ''}
+                        ${report.status !== 'resolved' ? `
+                            <button class="btn-resolve" onclick="resolveReport('${report.id}')">✅ Resolve</button>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+            
+            adminInfoWindow.setContent(content);
+            adminInfoWindow.open(adminMap, marker);
+        }
+        
+        // Make loadReports return a promise (override the original)
+        async function loadReports() {
+            const container = document.getElementById('reports-container');
+            
+            try {
+                const status = document.getElementById('filter-status').value;
+                const type = document.getElementById('filter-type').value;
+                const severity = document.getElementById('filter-severity').value;
+                
+                let url = '/admin/api/reports?';
+                if (status) url += `status=${status}&`;
+                if (type) url += `issue_type=${type}&`;
+                if (severity) url += `severity=${severity}&`;
+                
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (data.success) {
+                    reports = data.reports;
+                    renderReports();
+                    
+                    // Update map markers if in map view
+                    if (currentView === 'map' && adminMap) {
+                        updateAdminMapMarkers();
+                    }
+                } else {
+                    throw new Error(data.error);
+                }
+            } catch (error) {
+                console.error('Failed to load reports:', error);
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <span class="emoji-icon">❌</span>
+                        <p>Failed to load reports</p>
+                    </div>
+                `;
+            }
+        }
     </script>
+    
+    <!-- Google Maps API -->
+    {% if maps_api_key %}
+    <script async defer
+        src="https://maps.googleapis.com/maps/api/js?key={{ maps_api_key }}&libraries=visualization">
+    </script>
+    {% endif %}
 </body>
 </html>
