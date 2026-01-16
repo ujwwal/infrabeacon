@@ -280,3 +280,42 @@ def get_clusters():
     except Exception as e:
         logger.error(f"Failed to get clusters: {e}")
         return jsonify({'error': 'Failed to get clusters'}), 500
+
+
+@map_bp.route('/api/image-proxy')
+def proxy_image():
+    """
+    Proxy image requests to handle CORS issues with external image URLs.
+    
+    Query parameters:
+    - url: The image URL to proxy
+    """
+    import requests
+    from flask import Response
+    
+    image_url = request.args.get('url')
+    if not image_url:
+        return jsonify({'error': 'No URL provided'}), 400
+    
+    try:
+        # Fetch the image
+        response = requests.get(image_url, timeout=10, stream=True)
+        
+        if response.status_code != 200:
+            return jsonify({'error': 'Failed to fetch image'}), response.status_code
+        
+        # Get content type
+        content_type = response.headers.get('Content-Type', 'image/jpeg')
+        
+        # Return the image with proper headers
+        return Response(
+            response.content,
+            mimetype=content_type,
+            headers={
+                'Cache-Control': 'public, max-age=86400',  # Cache for 1 day
+                'Access-Control-Allow-Origin': '*'
+            }
+        )
+    except Exception as e:
+        logger.error(f"Image proxy error: {e}")
+        return jsonify({'error': 'Failed to proxy image'}), 500

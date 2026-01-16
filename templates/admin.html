@@ -349,6 +349,89 @@
             height: 100%;
         }
         
+        /* Map Controls */
+        .admin-map-controls {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            z-index: 1000;
+        }
+        
+        .map-control-btn {
+            width: 44px;
+            height: 44px;
+            border-radius: 8px;
+            background: white;
+            border: none;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .map-control-btn:hover {
+            background: #f5f5f5;
+        }
+        
+        .map-control-btn.active {
+            background: #1a73e8;
+            color: white;
+        }
+        
+        .admin-map-stats {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            background: white;
+            padding: 8px 16px;
+            border-radius: 8px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            z-index: 1000;
+            font-size: 14px;
+        }
+        
+        .admin-map-stats span {
+            margin-right: 16px;
+        }
+        
+        .admin-map-stats strong {
+            color: #1a73e8;
+        }
+        
+        .admin-map-legend {
+            position: absolute;
+            bottom: 16px;
+            left: 16px;
+            background: white;
+            padding: 12px;
+            border-radius: 8px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            z-index: 1000;
+            font-size: 12px;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+        
+        .legend-item:last-child {
+            margin-bottom: 0;
+        }
+        
+        .legend-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+        
         .map-info-window {
             max-width: 280px;
             padding: 8px;
@@ -477,11 +560,55 @@
                 <option value="medium">🟡 Medium</option>
                 <option value="low">🟢 Low</option>
             </select>
+            
+            <select id="filter-sort" onchange="applyFilters()">
+                <option value="date-desc">📅 Newest First</option>
+                <option value="date-asc">📅 Oldest First</option>
+                <option value="severity-desc">⚠️ Severity (High→Low)</option>
+                <option value="severity-asc">⚠️ Severity (Low→High)</option>
+                <option value="status-asc">📊 Status (New→Resolved)</option>
+                <option value="status-desc">📊 Status (Resolved→New)</option>
+            </select>
         </div>
         
         <!-- Map View -->
         <div class="admin-map-container" id="map-view">
             <div id="admin-map"></div>
+            
+            <!-- Stats Bar -->
+            <div class="admin-map-stats" id="admin-map-stats">
+                <span>Total: <strong id="map-total-count">0</strong></span>
+                <span>Showing: <strong id="map-visible-count">0</strong></span>
+            </div>
+            
+            <!-- Map Controls -->
+            <div class="admin-map-controls">
+                <button class="map-control-btn" id="admin-toggle-heatmap" title="Toggle Heatmap">
+                    <span class="emoji-icon">🔥</span>
+                </button>
+                <button class="map-control-btn" id="admin-locate-me" title="My Location">
+                    <span class="emoji-icon">📍</span>
+                </button>
+                <button class="map-control-btn" id="admin-refresh-map" title="Refresh">
+                    <span class="emoji-icon">🔄</span>
+                </button>
+            </div>
+            
+            <!-- Legend -->
+            <div class="admin-map-legend">
+                <div class="legend-item">
+                    <span class="legend-dot" style="background: #dc3545;"></span>
+                    <span>New</span>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-dot" style="background: #ffc107;"></span>
+                    <span>Verified</span>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-dot" style="background: #28a745;"></span>
+                    <span>Resolved</span>
+                </div>
+            </div>
         </div>
 
         <!-- Reports Table (List View) -->
@@ -561,15 +688,24 @@
                 'other': '⚠️ Other'
             };
             
-            container.innerHTML = reports.map(report => `
+            container.innerHTML = reports.map(report => {
+                // Get proxied image URL if needed
+                let imageUrl = report.image_url || '/static/img/placeholder.png';
+                if (imageUrl && imageUrl.startsWith('http') && !imageUrl.startsWith('data:')) {
+                    if (imageUrl.includes('storage.googleapis.com') || imageUrl.includes('firebasestorage.googleapis.com')) {
+                        imageUrl = `/map/api/image-proxy?url=${encodeURIComponent(report.image_url)}`;
+                    }
+                }
+                
+                return `
                 <div class="report-card" data-id="${report.id}">
                     <div>
                         <img 
                             class="report-image" 
-                            src="${report.image_url || '/static/img/placeholder.png'}" 
+                            src="${imageUrl}" 
                             alt="Report image"
                             onclick="openImageModal('${report.image_url}')"
-                            onerror="this.src='/static/img/placeholder.png'"
+                            onerror="this.src='/static/img/placeholder.png'; this.onerror=null;"
                         >
                     </div>
                     <div class="report-info">
@@ -611,7 +747,8 @@
                         </button>
                     </div>
                 </div>
-            `).join('');
+            `;
+            }).join('');
         }
         
         function formatStatus(status) {
@@ -635,9 +772,14 @@
         }
         
         // Refresh data
-        function refreshData() {
-            loadStats();
-            loadReports();
+        async function refreshData() {
+            await loadStats();
+            await loadReports();
+            
+            // Also refresh map if visible
+            if (currentView === 'map' && adminMap) {
+                updateAdminMapMarkers();
+            }
         }
         
         // Verify report
@@ -705,7 +847,16 @@
         // Image modal
         function openImageModal(url) {
             if (!url) return;
-            document.getElementById('modal-image').src = url;
+            
+            // Use proxy for external URLs
+            let imageUrl = url;
+            if (url.startsWith('http') && !url.startsWith('data:')) {
+                if (url.includes('storage.googleapis.com') || url.includes('firebasestorage.googleapis.com')) {
+                    imageUrl = `/map/api/image-proxy?url=${encodeURIComponent(url)}`;
+                }
+            }
+            
+            document.getElementById('modal-image').src = imageUrl;
             document.getElementById('image-modal').classList.add('active');
         }
         
@@ -722,6 +873,9 @@
         let adminMap = null;
         let adminMarkers = [];
         let adminInfoWindow = null;
+        let adminHeatmapLayer = null;
+        let showAdminHeatmap = false;
+        let userLocationMarker = null;
         let currentView = 'list';
         
         // Switch between list and map view
@@ -762,41 +916,97 @@
             
             adminInfoWindow = new google.maps.InfoWindow();
             
-            // Try to get user's current location
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(
-                    (position) => {
-                        const userLocation = {
-                            lat: position.coords.latitude,
-                            lng: position.coords.longitude
-                        };
-                        adminMap.setCenter(userLocation);
-                        adminMap.setZoom(13);
-                        // Update markers after centering on user location
-                        updateAdminMapMarkers();
-                    },
-                    (error) => {
-                        console.log('Geolocation error:', error.message);
-                        // Fall back to default center, markers will handle bounds
-                        updateAdminMapMarkers();
-                    },
-                    {
-                        enableHighAccuracy: true,
-                        timeout: 5000,
-                        maximumAge: 300000 // Cache position for 5 minutes
-                    }
-                );
-            } else {
-                // Geolocation not supported, use default
+            // Set up map controls
+            setupAdminMapControls();
+            
+            // Try to get user's current location and center map on it
+            locateAdminUser(true);
+        }
+        
+        // Setup admin map controls
+        function setupAdminMapControls() {
+            // Heatmap toggle
+            document.getElementById('admin-toggle-heatmap').addEventListener('click', function() {
+                showAdminHeatmap = !showAdminHeatmap;
+                this.classList.toggle('active', showAdminHeatmap);
+                
+                // Toggle markers and heatmap
+                adminMarkers.forEach(m => m.setMap(showAdminHeatmap ? null : adminMap));
+                if (adminHeatmapLayer) {
+                    adminHeatmapLayer.setMap(showAdminHeatmap ? adminMap : null);
+                }
+            });
+            
+            // Locate me
+            document.getElementById('admin-locate-me').addEventListener('click', () => locateAdminUser(true));
+            
+            // Refresh map
+            document.getElementById('admin-refresh-map').addEventListener('click', () => {
+                loadReports();
+            });
+        }
+        
+        // Locate user on admin map
+        function locateAdminUser(centerMap) {
+            if (!navigator.geolocation) {
+                console.log('Geolocation not supported');
                 updateAdminMapMarkers();
+                return;
             }
+            
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const userLocation = {
+                        lat: position.coords.latitude,
+                        lng: position.coords.longitude
+                    };
+                    
+                    if (centerMap && adminMap) {
+                        adminMap.setCenter(userLocation);
+                        adminMap.setZoom(14);
+                    }
+                    
+                    // Add or update user location marker
+                    if (userLocationMarker) {
+                        userLocationMarker.setPosition(userLocation);
+                    } else {
+                        userLocationMarker = new google.maps.Marker({
+                            position: userLocation,
+                            map: adminMap,
+                            title: 'Your Location',
+                            icon: {
+                                path: google.maps.SymbolPath.CIRCLE,
+                                scale: 10,
+                                fillColor: '#4285F4',
+                                fillOpacity: 1,
+                                strokeColor: '#fff',
+                                strokeWeight: 3
+                            },
+                            zIndex: 999
+                        });
+                    }
+                    
+                    // Update markers after centering
+                    updateAdminMapMarkers();
+                },
+                (error) => {
+                    console.log('Geolocation error:', error.message);
+                    // Fall back to default center, still update markers
+                    updateAdminMapMarkers();
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 300000 // Cache position for 5 minutes
+                }
+            );
         }
         
         // Update markers on the admin map
         function updateAdminMapMarkers() {
             if (!adminMap) return;
             
-            // Clear existing markers
+            // Clear existing markers (but not user location marker)
             adminMarkers.forEach(marker => marker.setMap(null));
             adminMarkers = [];
             
@@ -814,7 +1024,9 @@
                 'resolved': '#28a745'
             };
             
+            const heatmapData = [];
             const bounds = new google.maps.LatLngBounds();
+            let validMarkerCount = 0;
             
             reports.forEach(report => {
                 if (!report.latitude || !report.longitude) return;
@@ -824,7 +1036,7 @@
                 
                 const marker = new google.maps.Marker({
                     position: position,
-                    map: adminMap,
+                    map: showAdminHeatmap ? null : adminMap,
                     title: issueTypes[report.issue_type] || report.issue_type,
                     icon: {
                         path: google.maps.SymbolPath.CIRCLE,
@@ -842,10 +1054,34 @@
                 
                 adminMarkers.push(marker);
                 bounds.extend(position);
+                validMarkerCount++;
+                
+                // Add to heatmap data (weight based on status - unresolved issues are heavier)
+                const statusWeights = { 'new': 10, 'verified': 5, 'resolved': 2 };
+                heatmapData.push({
+                    location: new google.maps.LatLng(report.latitude, report.longitude),
+                    weight: statusWeights[report.status] || 5
+                });
             });
             
-            // Fit map to show all markers
-            if (adminMarkers.length > 0) {
+            // Create/update heatmap layer
+            if (adminHeatmapLayer) {
+                adminHeatmapLayer.setMap(null);
+            }
+            
+            adminHeatmapLayer = new google.maps.visualization.HeatmapLayer({
+                data: heatmapData,
+                map: showAdminHeatmap ? adminMap : null,
+                radius: 30,
+                opacity: 0.7
+            });
+            
+            // Update stats
+            document.getElementById('map-total-count').textContent = reports.length;
+            document.getElementById('map-visible-count').textContent = validMarkerCount;
+            
+            // Only fit bounds if we have markers and no user location centered
+            if (validMarkerCount > 0 && !userLocationMarker) {
                 adminMap.fitBounds(bounds);
                 // Don't zoom in too far
                 const listener = google.maps.event.addListener(adminMap, 'idle', () => {
@@ -865,9 +1101,37 @@
                 'other': '⚠️ Other'
             };
             
+            // Generate unique ID for this popup's image
+            const popupId = 'admin-popup-img-' + Date.now();
+            
+            let imageHtml = '';
+            if (report.image_url && report.image_url.trim() !== '') {
+                // Use image proxy for external URLs to avoid CORS issues
+                let imageUrl = report.image_url;
+                if (imageUrl.startsWith('http') && !imageUrl.startsWith('data:')) {
+                    if (imageUrl.includes('storage.googleapis.com') || imageUrl.includes('firebasestorage.googleapis.com')) {
+                        imageUrl = `/map/api/image-proxy?url=${encodeURIComponent(report.image_url)}`;
+                    }
+                }
+                
+                imageHtml = `
+                    <div class="image-loading" id="${popupId}-loading" style="width:100%;height:150px;background:#f0f0f0;border-radius:8px;margin-bottom:8px;display:flex;align-items:center;justify-content:center;">
+                        <span style="color:#999;">Loading...</span>
+                    </div>
+                    <img 
+                        id="${popupId}" 
+                        src="${imageUrl}" 
+                        alt="Issue" 
+                        style="display:none;width:100%;max-height:150px;object-fit:cover;border-radius:8px;margin-bottom:8px;"
+                        onload="this.style.display='block'; document.getElementById('${popupId}-loading').style.display='none';"
+                        onerror="document.getElementById('${popupId}-loading').innerHTML='<span style=font-size:32px>📷</span><br><span style=font-size:12px;color:#999>Image unavailable</span>'; this.style.display='none';"
+                    >
+                `;
+            }
+            
             const content = `
                 <div class="map-info-window">
-                    ${report.image_url ? `<img src="${report.image_url}" alt="Issue" onerror="this.style.display='none'">` : ''}
+                    ${imageHtml}
                     <h4>${issueTypes[report.issue_type] || report.issue_type}</h4>
                     <p>${report.description || 'No description'}</p>
                     <p><strong>Status:</strong> ${formatStatus(report.status)}</p>
@@ -898,6 +1162,7 @@
                 const status = document.getElementById('filter-status').value;
                 const type = document.getElementById('filter-type').value;
                 const severity = document.getElementById('filter-severity').value;
+                const sortOption = document.getElementById('filter-sort').value;
                 
                 let url = '/admin/api/reports?';
                 if (status) url += `status=${status}&`;
@@ -909,6 +1174,10 @@
                 
                 if (data.success) {
                     reports = data.reports;
+                    
+                    // Apply client-side sorting
+                    sortReports(sortOption);
+                    
                     renderReports();
                     
                     // Update map markers if in map view
@@ -926,6 +1195,64 @@
                         <p>Failed to load reports</p>
                     </div>
                 `;
+            }
+        }
+        
+        // Sort reports based on selected option
+        function sortReports(sortOption) {
+            const severityOrder = { 'high': 3, 'medium': 2, 'low': 1 };
+            const statusOrder = { 'new': 1, 'verified': 2, 'resolved': 3 };
+            
+            switch (sortOption) {
+                case 'date-desc':
+                    reports.sort((a, b) => {
+                        const dateA = new Date(a.created_at || 0);
+                        const dateB = new Date(b.created_at || 0);
+                        return dateB - dateA;
+                    });
+                    break;
+                case 'date-asc':
+                    reports.sort((a, b) => {
+                        const dateA = new Date(a.created_at || 0);
+                        const dateB = new Date(b.created_at || 0);
+                        return dateA - dateB;
+                    });
+                    break;
+                case 'severity-desc':
+                    reports.sort((a, b) => {
+                        const sevA = severityOrder[a.severity] || 2;
+                        const sevB = severityOrder[b.severity] || 2;
+                        return sevB - sevA;
+                    });
+                    break;
+                case 'severity-asc':
+                    reports.sort((a, b) => {
+                        const sevA = severityOrder[a.severity] || 2;
+                        const sevB = severityOrder[b.severity] || 2;
+                        return sevA - sevB;
+                    });
+                    break;
+                case 'status-asc':
+                    reports.sort((a, b) => {
+                        const statA = statusOrder[a.status] || 1;
+                        const statB = statusOrder[b.status] || 1;
+                        return statA - statB;
+                    });
+                    break;
+                case 'status-desc':
+                    reports.sort((a, b) => {
+                        const statA = statusOrder[a.status] || 1;
+                        const statB = statusOrder[b.status] || 1;
+                        return statB - statA;
+                    });
+                    break;
+                default:
+                    // Default: newest first
+                    reports.sort((a, b) => {
+                        const dateA = new Date(a.created_at || 0);
+                        const dateB = new Date(b.created_at || 0);
+                        return dateB - dateA;
+                    });
             }
         }
     </script>

@@ -155,6 +155,7 @@
         
         .issue-popup {
             max-width: 280px;
+            min-width: 200px;
         }
         
         .issue-popup img {
@@ -163,6 +164,45 @@
             object-fit: cover;
             border-radius: 8px;
             margin-bottom: 8px;
+            background: #f0f0f0;
+        }
+        
+        .issue-popup .image-placeholder {
+            width: 100%;
+            height: 150px;
+            background: #f0f0f0;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #999;
+            font-size: 14px;
+        }
+        
+        .issue-popup .image-loading {
+            width: 100%;
+            height: 150px;
+            background: #f0f0f0;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .issue-popup .image-loading::after {
+            content: '';
+            width: 24px;
+            height: 24px;
+            border: 3px solid #ddd;
+            border-top-color: #1a73e8;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
         
         .issue-popup h4 {
@@ -468,9 +508,33 @@
                 'resolved': '🟢 Resolved'
             };
             
+            // Generate unique ID for this popup's image
+            const popupId = 'popup-img-' + Date.now();
+            
             let imageHtml = '';
-            if (data.image_url) {
-                imageHtml = `<img src="${data.image_url}" alt="Issue photo" onerror="this.style.display='none'">`;
+            if (data.image_url && data.image_url.trim() !== '') {
+                // Use image proxy for external URLs to avoid CORS issues
+                let imageUrl = data.image_url;
+                if (imageUrl.startsWith('http') && !imageUrl.startsWith('data:')) {
+                    // Check if it's a signed URL or external URL that might have CORS issues
+                    if (imageUrl.includes('storage.googleapis.com') || imageUrl.includes('firebasestorage.googleapis.com')) {
+                        // Use proxy for Google Storage URLs
+                        imageUrl = `/map/api/image-proxy?url=${encodeURIComponent(data.image_url)}`;
+                    }
+                }
+                
+                // Show loading state, then load the actual image
+                imageHtml = `
+                    <div class="image-loading" id="${popupId}-loading"></div>
+                    <img 
+                        id="${popupId}" 
+                        src="${imageUrl}" 
+                        alt="Issue photo" 
+                        style="display: none;"
+                        onload="document.getElementById('${popupId}').style.display='block'; document.getElementById('${popupId}-loading').style.display='none';"
+                        onerror="handleImageError('${popupId}')"
+                    >
+                `;
             }
             
             const content = `
@@ -489,6 +553,22 @@
             
             infoWindow.setContent(content);
             infoWindow.open(map, marker);
+        }
+        
+        // Handle image loading errors
+        function handleImageError(imgId) {
+            const img = document.getElementById(imgId);
+            const loading = document.getElementById(imgId + '-loading');
+            
+            if (loading) {
+                loading.innerHTML = '<span style="font-size: 32px;">📷</span><br><span style="font-size: 12px; color: #999;">Image unavailable</span>';
+                loading.style.flexDirection = 'column';
+                loading.classList.remove('image-loading');
+                loading.classList.add('image-placeholder');
+            }
+            if (img) {
+                img.style.display = 'none';
+            }
         }
         
         function formatDate(dateStr) {

@@ -141,18 +141,31 @@ class StorageService:
                 # Upload
                 blob.upload_from_string(file_data, content_type=blob.content_type)
                 
-                # Generate a signed URL for secure access (valid for 7 days)
-                # For production, consider shorter expiration or using Firebase Storage
-                from datetime import timedelta
-                signed_url = blob.generate_signed_url(
-                    version="v4",
-                    expiration=timedelta(days=7),
-                    method="GET"
-                )
-                
-                public_url = signed_url
-                logger.info(f"Uploaded image to: {public_url}")
-                return True, public_url
+                # Make the blob publicly accessible
+                try:
+                    blob.make_public()
+                    public_url = blob.public_url
+                    logger.info(f"Uploaded image (public): {public_url}")
+                    return True, public_url
+                except Exception as public_error:
+                    # If can't make public, try signed URL with longer expiration
+                    logger.warning(f"Could not make blob public: {public_error}, using signed URL")
+                    from datetime import timedelta
+                    try:
+                        signed_url = blob.generate_signed_url(
+                            version="v4",
+                            expiration=timedelta(days=365),  # 1 year expiration
+                            method="GET"
+                        )
+                        logger.info(f"Uploaded image (signed URL): {signed_url}")
+                        return True, signed_url
+                    except Exception as sign_error:
+                        # Fall back to Firebase Storage URL format
+                        logger.warning(f"Could not generate signed URL: {sign_error}, using direct URL")
+                        # Firebase Storage compatible URL
+                        firebase_url = f"https://firebasestorage.googleapis.com/v0/b/{self.bucket_name}/o/{blob_name.replace('/', '%2F')}?alt=media"
+                        logger.info(f"Uploaded image (firebase URL): {firebase_url}")
+                        return True, firebase_url
                 
             except Exception as e:
                 logger.error(f"Failed to upload image: {e}")
