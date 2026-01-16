@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#1a73e8">
+    <title>Report Issue - InfraBeacon</title>
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="app-header compact">
+        <a href="/" class="back-link">
+            <span class="emoji-icon">←</span>
+        </a>
+        <h1 class="page-title">Report Issue</h1>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content report-page">
+        <!-- Progress Indicator -->
+        <div class="progress-steps">
+            <div class="step active" data-step="1">
+                <span class="step-dot">1</span>
+                <span class="step-label">Photo</span>
+            </div>
+            <div class="step-line"></div>
+            <div class="step" data-step="2">
+                <span class="step-dot">2</span>
+                <span class="step-label">Location</span>
+            </div>
+            <div class="step-line"></div>
+            <div class="step" data-step="3">
+                <span class="step-dot">3</span>
+                <span class="step-label">Confirm</span>
+            </div>
+            <div class="step-line"></div>
+            <div class="step" data-step="4">
+                <span class="step-dot">4</span>
+                <span class="step-label">Done</span>
+            </div>
+        </div>
+
+        <!-- Step 1: Capture Photo -->
+        <section class="form-section" id="step-photo">
+            <div class="capture-area" id="capture-area">
+                <input type="file" id="image-input" accept="image/*" capture="environment" hidden>
+                
+                <div class="capture-placeholder" id="capture-placeholder" onclick="document.getElementById('image-input').click()">
+                    <span class="emoji-icon large">📷</span>
+                    <span class="capture-text">Tap to take photo</span>
+                    <span class="capture-subtext">or select from gallery</span>
+                </div>
+                
+                <div class="preview-container hidden" id="preview-container">
+                    <img id="preview-image" src="" alt="Preview">
+                    <button type="button" class="btn-icon retake-btn" onclick="retakePhoto()">
+                        <span class="emoji-icon">🔄</span>
+                    </button>
+                </div>
+            </div>
+            
+            <button type="button" class="btn-primary btn-full" id="next-to-location" disabled>
+                Continue
+                <span class="emoji-icon">→</span>
+            </button>
+        </section>
+
+        <!-- Step 2: Location -->
+        <section class="form-section hidden" id="step-location">
+            <div class="location-status" id="location-status">
+                <span class="emoji-icon spinning">📍</span>
+                <span class="status-text">Getting your location...</span>
+            </div>
+            
+            <div class="location-display hidden" id="location-display">
+                <div class="location-icon">
+                    <span class="emoji-icon">📍</span>
+                </div>
+                <div class="location-info">
+                    <span class="location-coords" id="location-coords">--.----, --.----</span>
+                    <span class="location-accuracy" id="location-accuracy">Accuracy: --m</span>
+                </div>
+                <button type="button" class="btn-icon" onclick="refreshLocation()">
+                    <span class="emoji-icon">🔄</span>
+                </button>
+            </div>
+            
+            <!-- Mini Map -->
+            <div class="mini-map" id="mini-map">
+                <div class="map-placeholder">
+                    <span class="emoji-icon large">🗺️</span>
+                    <span>Map loading...</span>
+                </div>
+            </div>
+            
+            <!-- Description (Optional) -->
+            <div class="form-group">
+                <label for="description">Description (optional)</label>
+                <textarea id="description" placeholder="Add details about the issue..." rows="3"></textarea>
+            </div>
+            
+            <div class="btn-group">
+                <button type="button" class="btn-secondary" onclick="goToStep(1)">
+                    <span class="emoji-icon">←</span>
+                    Back
+                </button>
+                <button type="button" class="btn-primary" id="analyze-btn" disabled>
+                    Analyze Image
+                    <span class="emoji-icon">🔍</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- Step 3: AI Confirmation -->
+        <section class="form-section hidden" id="step-confirm-ai">
+            <div class="ai-analysis-card">
+                <h3>🤖 AI Analysis Result</h3>
+                <p class="ai-note">Please review and confirm the detected issue type</p>
+                
+                <div class="detected-issue">
+                    <span class="label">Detected Issue:</span>
+                    <span class="detected-type" id="detected-type">-</span>
+                </div>
+                
+                <div class="ai-description" id="ai-description-text">
+                    <!-- AI description will appear here -->
+                </div>
+                
+                <div class="form-group">
+                    <label for="issue-type-select">Confirm or Change Issue Type:</label>
+                    <select id="issue-type-select" class="issue-select">
+                        <option value="pothole">🕳️ Pothole</option>
+                        <option value="broken_light">💡 Broken Light</option>
+                        <option value="garbage">🗑️ Garbage</option>
+                        <option value="waterlogging">🌊 Waterlogging</option>
+                        <option value="other">⚠️ Other Issue</option>
+                    </select>
+                </div>
+                
+                <div class="confirm-checkbox">
+                    <label>
+                        <input type="checkbox" id="confirm-checkbox">
+                        <span>I confirm this is the correct issue type</span>
+                    </label>
+                </div>
+            </div>
+            
+            <div class="btn-group">
+                <button type="button" class="btn-secondary" onclick="goToStep(2)">
+                    <span class="emoji-icon">←</span>
+                    Back
+                </button>
+                <button type="button" class="btn-primary" id="submit-report" disabled>
+                    Submit Report
+                    <span class="emoji-icon">📤</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- Step 4: Confirmation -->
+        <section class="form-section hidden" id="step-confirm">
+            <div class="confirmation-card">
+                <div class="confirm-icon success">
+                    <span class="emoji-icon large">✅</span>
+                </div>
+                <h2>Report Submitted!</h2>
+                <p class="confirm-message" id="confirm-message">
+                    Your report has been submitted successfully.
+                </p>
+                
+                <!-- AI Analysis Result -->
+                <div class="analysis-result" id="analysis-result">
+                    <h4>AI Analysis</h4>
+                    <div class="analysis-details">
+                        <div class="analysis-item">
+                            <span class="label">Issue Type:</span>
+                            <span class="value" id="result-type">-</span>
+                        </div>
+                        <div class="analysis-item">
+                            <span class="label">Description:</span>
+                            <span class="value" id="result-description">-</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Duplicate Warning -->
+                <div class="duplicate-warning hidden" id="duplicate-warning">
+                    <span class="emoji-icon">⚠️</span>
+                    <p id="duplicate-message">A similar report exists nearby.</p>
+                </div>
+            </div>
+            
+            <div class="btn-group">
+                <a href="/map" class="btn-secondary">
+                    <span class="emoji-icon">🗺️</span>
+                    View on Map
+                </a>
+                <a href="/report" class="btn-primary">
+                    <span class="emoji-icon">➕</span>
+                    New Report
+                </a>
+            </div>
+        </section>
+
+        <!-- Loading Overlay -->
+        <div class="loading-overlay hidden" id="loading-overlay">
+            <div class="loading-content">
+                <div class="spinner"></div>
+                <p id="loading-message">Submitting report...</p>
+            </div>
+        </div>
+    </main>
+
+    <!-- Google Maps API -->
+    {% if maps_api_key %}
+    <script async defer 
+        src="https://maps.googleapis.com/maps/api/js?key={{ maps_api_key }}&callback=initMiniMap">
+    </script>
+    {% endif %}
+    
+    <script>
+        // State
+        let imageData = null;
+        let latitude = null;
+        let longitude = null;
+        let accuracy = null;
+        let miniMap = null;
+        let marker = null;
+        let aiAnalysis = null;  // Store AI analysis result
+        
+        // DOM Elements
+        const imageInput = document.getElementById('image-input');
+        const previewContainer = document.getElementById('preview-container');
+        const previewImage = document.getElementById('preview-image');
+        const capturePlaceholder = document.getElementById('capture-placeholder');
+        const nextBtn = document.getElementById('next-to-location');
+        const analyzeBtn = document.getElementById('analyze-btn');
+        const submitBtn = document.getElementById('submit-report');
+        const locationStatus = document.getElementById('location-status');
+        const locationDisplay = document.getElementById('location-display');
+        const confirmCheckbox = document.getElementById('confirm-checkbox');
+        const issueTypeSelect = document.getElementById('issue-type-select');
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            imageInput.addEventListener('change', handleImageSelect);
+            nextBtn.addEventListener('click', () => goToStep(2));
+            analyzeBtn.addEventListener('click', analyzeImage);
+            submitBtn.addEventListener('click', submitReport);
+            confirmCheckbox.addEventListener('change', updateSubmitButton);
+        });
+        
+        // Handle image selection
+        function handleImageSelect(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                imageData = event.target.result;
+                previewImage.src = imageData;
+                previewContainer.classList.remove('hidden');
+                capturePlaceholder.classList.add('hidden');
+                nextBtn.disabled = false;
+            };
+            reader.readAsDataURL(file);
+        }
+        
+        // Retake photo
+        function retakePhoto() {
+            imageData = null;
+            previewImage.src = '';
+            previewContainer.classList.add('hidden');
+            capturePlaceholder.classList.remove('hidden');
+            nextBtn.disabled = true;
+            imageInput.value = '';
+            aiAnalysis = null;
+        }
+        
+        // Navigate to step
+        function goToStep(step) {
+            // Update progress
+            document.querySelectorAll('.step').forEach((el, idx) => {
+                if (idx + 1 <= step) {
+                    el.classList.add('active');
+                } else {
+                    el.classList.remove('active');
+                }
+            });
+            
+            // Show/hide sections
+            document.getElementById('step-photo').classList.toggle('hidden', step !== 1);
+            document.getElementById('step-location').classList.toggle('hidden', step !== 2);
+            document.getElementById('step-confirm-ai').classList.toggle('hidden', step !== 3);
+            document.getElementById('step-confirm').classList.toggle('hidden', step !== 4);
+            
+            // Trigger location fetch when going to step 2
+            if (step === 2 && !latitude) {
+                getLocation();
+            }
+        }
+        
+        // Get current location
+        function getLocation() {
+            locationStatus.classList.remove('hidden');
+            locationDisplay.classList.add('hidden');
+            analyzeBtn.disabled = true;
+            
+            if (!navigator.geolocation) {
+                showLocationError('Geolocation is not supported by your browser');
+                return;
+            }
+            
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    latitude = position.coords.latitude;
+                    longitude = position.coords.longitude;
+                    accuracy = position.coords.accuracy;
+                    
+                    document.getElementById('location-coords').textContent = 
+                        `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+                    document.getElementById('location-accuracy').textContent = 
+                        `Accuracy: ${Math.round(accuracy)}m`;
+                    
+                    locationStatus.classList.add('hidden');
+                    locationDisplay.classList.remove('hidden');
+                    analyzeBtn.disabled = false;
+                    
+                    // Update mini map
+                    updateMiniMap();
+                },
+                (error) => {
+                    showLocationError(getLocationErrorMessage(error));
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0
+                }
+            );
+        }
+        
+        function refreshLocation() {
+            getLocation();
+        }
+        
+        function getLocationErrorMessage(error) {
+            switch(error.code) {
+                case error.PERMISSION_DENIED:
+                    return 'Location permission denied. Please enable location access.';
+                case error.POSITION_UNAVAILABLE:
+                    return 'Location information unavailable.';
+                case error.TIMEOUT:
+                    return 'Location request timed out. Please try again.';
+                default:
+                    return 'An unknown error occurred.';
+            }
+        }
+        
+        function showLocationError(message) {
+            locationStatus.innerHTML = `
+                <span class="emoji-icon">❌</span>
+                <span class="status-text error">${message}</span>
+                <button type="button" class="btn-small" onclick="getLocation()">Retry</button>
+            `;
+        }
+        
+        // Initialize mini map (called by Google Maps callback)
+        function initMiniMap() {
+            // Map will be initialized when location is available
+        }
+        
+        function updateMiniMap() {
+            const mapContainer = document.getElementById('mini-map');
+            if (!latitude || !longitude) return;
+            
+            if (typeof google !== 'undefined' && google.maps) {
+                const location = { lat: latitude, lng: longitude };
+                
+                if (!miniMap) {
+                    miniMap = new google.maps.Map(mapContainer, {
+                        center: location,
+                        zoom: 17,
+                        disableDefaultUI: true,
+                        zoomControl: true,
+                        styles: [
+                            { featureType: 'poi', stylers: [{ visibility: 'off' }] }
+                        ]
+                    });
+                } else {
+                    miniMap.setCenter(location);
+                }
+                
+                if (!marker) {
+                    marker = new google.maps.Marker({
+                        position: location,
+                        map: miniMap,
+                        title: 'Report Location',
+                        animation: google.maps.Animation.DROP
+                    });
+                } else {
+                    marker.setPosition(location);
+                }
+            } else {
+                // Fallback: show static map
+                mapContainer.innerHTML = `
+                    <div class="map-fallback">
+                        <span class="emoji-icon">📍</span>
+                        <span>Location: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}</span>
+                    </div>
+                `;
+            }
+        }
+        
+        // Analyze image with AI
+        async function analyzeImage() {
+            if (!imageData) {
+                alert('Please take a photo first');
+                return;
+            }
+            
+            // Show loading
+            const loadingOverlay = document.getElementById('loading-overlay');
+            document.getElementById('loading-message').textContent = 'Analyzing image with AI...';
+            loadingOverlay.classList.remove('hidden');
+            
+            try {
+                const response = await fetch('/api/analyze', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        image: imageData
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    aiAnalysis = result.analysis;
+                    showAIConfirmation(aiAnalysis);
+                } else {
+                    throw new Error(result.error || 'Failed to analyze image');
+                }
+            } catch (error) {
+                console.error('Analysis error:', error);
+                alert('Failed to analyze image: ' + error.message);
+            } finally {
+                loadingOverlay.classList.add('hidden');
+            }
+        }
+        
+        // Show AI confirmation step
+        function showAIConfirmation(analysis) {
+            goToStep(3);
+            
+            // Display detected issue type
+            const detectedType = formatIssueType(analysis.issue_type);
+            document.getElementById('detected-type').textContent = detectedType;
+            
+            // Set the dropdown to the AI-detected type
+            issueTypeSelect.value = analysis.issue_type;
+            
+            // Display AI description (using textContent to prevent XSS)
+            const descEl = document.getElementById('ai-description-text');
+            descEl.textContent = analysis.description || 'No additional details from AI analysis.';
+            
+            // Reset confirmation checkbox
+            confirmCheckbox.checked = false;
+            submitBtn.disabled = true;
+        }
+        
+        // Update submit button state based on checkbox
+        function updateSubmitButton() {
+            submitBtn.disabled = !confirmCheckbox.checked;
+        }
+        
+        // Submit report with user-confirmed issue type
+        async function submitReport() {
+            if (!imageData || !latitude || !longitude) {
+                alert('Please complete all required steps');
+                return;
+            }
+            
+            if (!confirmCheckbox.checked) {
+                alert('Please confirm the issue type before submitting');
+                return;
+            }
+            
+            // Show loading
+            const loadingOverlay = document.getElementById('loading-overlay');
+            document.getElementById('loading-message').textContent = 'Submitting report...';
+            loadingOverlay.classList.remove('hidden');
+            
+            try {
+                const description = document.getElementById('description').value;
+                const confirmedIssueType = issueTypeSelect.value;
+                
+                const response = await fetch('/api/reports', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        image: imageData,
+                        latitude: latitude,
+                        longitude: longitude,
+                        description: description,
+                        issue_type: confirmedIssueType  // User-confirmed issue type
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    // Show final confirmation
+                    showFinalConfirmation(result, confirmedIssueType);
+                } else {
+                    throw new Error(result.error || 'Failed to submit report');
+                }
+            } catch (error) {
+                console.error('Submit error:', error);
+                alert('Failed to submit report: ' + error.message);
+            } finally {
+                loadingOverlay.classList.add('hidden');
+            }
+        }
+        
+        function showFinalConfirmation(result, confirmedType) {
+            goToStep(4);
+            
+            // Update analysis results (severity is hidden from regular users)
+            document.getElementById('result-type').textContent = formatIssueType(confirmedType);
+            
+            if (result.analysis && result.analysis.description) {
+                document.getElementById('result-description').textContent = result.analysis.description;
+            } else {
+                document.getElementById('result-description').textContent = 'Issue reported successfully';
+            }
+            
+            // Show duplicate warning if applicable
+            if (result.duplicate_warning) {
+                const warningEl = document.getElementById('duplicate-warning');
+                warningEl.classList.remove('hidden');
+                document.getElementById('duplicate-message').textContent = 
+                    result.duplicate_warning.message;
+            }
+        }
+        
+        function formatIssueType(type) {
+            const types = {
+                'pothole': '🕳️ Pothole',
+                'broken_light': '💡 Broken Light',
+                'garbage': '🗑️ Garbage',
+                'waterlogging': '🌊 Waterlogging',
+                'other': '⚠️ Other Issue'
+            };
+            return types[type] || type;
+        }
+    </script>
+</body>
+</html>

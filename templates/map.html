@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#1a73e8">
+    <title>Issue Map - InfraBeacon</title>
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="/static/css/style.css">
+    
+    <style>
+        /* Map-specific styles */
+        .map-page {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        .map-container {
+            flex: 1;
+            position: relative;
+        }
+        
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .map-controls {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            z-index: 1000;
+        }
+        
+        .map-control-btn {
+            width: 44px;
+            height: 44px;
+            border-radius: 8px;
+            background: white;
+            border: none;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .map-control-btn:hover {
+            background: #f5f5f5;
+        }
+        
+        .map-control-btn.active {
+            background: #1a73e8;
+            color: white;
+        }
+        
+        .filter-panel {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            border-radius: 16px 16px 0 0;
+            box-shadow: 0 -4px 20px rgba(0,0,0,0.15);
+            transform: translateY(calc(100% - 60px));
+            transition: transform 0.3s ease;
+            z-index: 1001;
+        }
+        
+        .filter-panel.expanded {
+            transform: translateY(0);
+        }
+        
+        .filter-handle {
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        
+        .filter-handle-bar {
+            width: 40px;
+            height: 4px;
+            background: #ddd;
+            border-radius: 2px;
+        }
+        
+        .filter-content {
+            padding: 0 20px 20px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .filter-group {
+            margin-bottom: 16px;
+        }
+        
+        .filter-group h4 {
+            margin: 0 0 8px;
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .filter-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        
+        .filter-chip {
+            padding: 8px 16px;
+            border-radius: 20px;
+            background: #f0f0f0;
+            border: none;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .filter-chip.active {
+            background: #1a73e8;
+            color: white;
+        }
+        
+        .issue-popup {
+            max-width: 280px;
+        }
+        
+        .issue-popup img {
+            width: 100%;
+            height: 150px;
+            object-fit: cover;
+            border-radius: 8px;
+            margin-bottom: 8px;
+        }
+        
+        .issue-popup h4 {
+            margin: 0 0 4px;
+            font-size: 16px;
+        }
+        
+        .legend {
+            position: absolute;
+            bottom: 80px;
+            left: 16px;
+            background: white;
+            padding: 12px;
+            border-radius: 8px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            z-index: 1000;
+            font-size: 12px;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+        
+        .legend-item:last-child {
+            margin-bottom: 0;
+        }
+        
+        .legend-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+        
+        .legend-dot.high { background: #dc3545; }
+        .legend-dot.medium { background: #ffc107; }
+        .legend-dot.low { background: #28a745; }
+        
+        .stats-bar {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            background: white;
+            padding: 8px 16px;
+            border-radius: 8px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            z-index: 1000;
+            font-size: 14px;
+        }
+        
+        .stats-bar span {
+            margin-right: 16px;
+        }
+        
+        .stats-bar strong {
+            color: #1a73e8;
+        }
+    </style>
+</head>
+<body class="map-page">
+    <!-- Header -->
+    <header class="app-header compact">
+        <a href="/" class="back-link">
+            <span class="emoji-icon">←</span>
+        </a>
+        <h1 class="page-title">Issue Map</h1>
+        <a href="/report" class="header-action">
+            <span class="emoji-icon">➕</span>
+        </a>
+    </header>
+
+    <!-- Map Container -->
+    <div class="map-container">
+        <div id="map"></div>
+        
+        <!-- Stats Bar -->
+        <div class="stats-bar" id="stats-bar">
+            <span>Total: <strong id="total-count">0</strong></span>
+            <span>Showing: <strong id="visible-count">0</strong></span>
+        </div>
+        
+        <!-- Map Controls -->
+        <div class="map-controls">
+            <button class="map-control-btn" id="toggle-heatmap" title="Toggle Heatmap">
+                <span class="emoji-icon">🔥</span>
+            </button>
+            <button class="map-control-btn" id="locate-me" title="My Location">
+                <span class="emoji-icon">📍</span>
+            </button>
+            <button class="map-control-btn" id="refresh-data" title="Refresh">
+                <span class="emoji-icon">🔄</span>
+            </button>
+        </div>
+        
+        <!-- Legend -->
+        <div class="legend">
+            <div class="legend-item">
+                <span class="legend-dot" style="background: #dc3545;"></span>
+                <span>New</span>
+            </div>
+            <div class="legend-item">
+                <span class="legend-dot" style="background: #ffc107;"></span>
+                <span>Verified</span>
+            </div>
+            <div class="legend-item">
+                <span class="legend-dot" style="background: #28a745;"></span>
+                <span>Resolved</span>
+            </div>
+        </div>
+        
+        <!-- Filter Panel -->
+        <div class="filter-panel" id="filter-panel">
+            <div class="filter-handle" onclick="toggleFilterPanel()">
+                <div class="filter-handle-bar"></div>
+            </div>
+            <div class="filter-content">
+                <div class="filter-group">
+                    <h4>Status</h4>
+                    <div class="filter-chips">
+                        <button class="filter-chip active" data-filter="status" data-value="">All</button>
+                        <button class="filter-chip" data-filter="status" data-value="new">🔴 New</button>
+                        <button class="filter-chip" data-filter="status" data-value="verified">🟡 Verified</button>
+                        <button class="filter-chip" data-filter="status" data-value="resolved">🟢 Resolved</button>
+                    </div>
+                </div>
+                <div class="filter-group">
+                    <h4>Issue Type</h4>
+                    <div class="filter-chips">
+                        <button class="filter-chip active" data-filter="type" data-value="">All</button>
+                        <button class="filter-chip" data-filter="type" data-value="pothole">🕳️ Pothole</button>
+                        <button class="filter-chip" data-filter="type" data-value="broken_light">💡 Broken Light</button>
+                        <button class="filter-chip" data-filter="type" data-value="garbage">🗑️ Garbage</button>
+                        <button class="filter-chip" data-filter="type" data-value="waterlogging">🌊 Waterlogging</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Google Maps API with Visualization library for heatmap -->
+    <script async defer 
+        src="https://maps.googleapis.com/maps/api/js?key={{ maps_api_key }}&libraries=visualization&callback=initMap">
+    </script>
+    
+    <script>
+        // State
+        let map = null;
+        let markers = [];
+        let heatmapLayer = null;
+        let showHeatmap = false;
+        let infoWindow = null;
+        let currentFilters = {
+            status: '',
+            type: ''
+        };
+        
+        // Initialize map
+        function initMap() {
+            // Default to a central location (will update with user location)
+            const defaultCenter = { lat: 28.6139, lng: 77.2090 }; // Delhi, India
+            
+            map = new google.maps.Map(document.getElementById('map'), {
+                center: defaultCenter,
+                zoom: 12,
+                styles: [
+                    { featureType: 'poi', elementType: 'labels', stylers: [{ visibility: 'off' }] }
+                ],
+                mapTypeControl: false,
+                fullscreenControl: false,
+                streetViewControl: false
+            });
+            
+            infoWindow = new google.maps.InfoWindow();
+            
+            // Load markers
+            loadMarkers();
+            
+            // Set up controls
+            setupControls();
+            
+            // Try to get user location
+            locateUser(false);
+        }
+        
+        // Load markers from API
+        async function loadMarkers() {
+            try {
+                let url = '/map/api/markers?';
+                if (currentFilters.status) url += `status=${currentFilters.status}&`;
+                if (currentFilters.type) url += `issue_type=${currentFilters.type}&`;
+                
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Clear existing markers
+                    clearMarkers();
+                    
+                    // Create new markers
+                    const heatmapData = [];
+                    
+                    data.markers.forEach(markerData => {
+                        const position = { lat: markerData.lat, lng: markerData.lng };
+                        
+                        // Color based on status (not severity - severity is admin-only)
+                        const statusColors = {
+                            'new': '#dc3545',      // Red
+                            'verified': '#ffc107', // Yellow
+                            'resolved': '#28a745'  // Green
+                        };
+                        const markerColor = statusColors[markerData.status] || '#dc3545';
+                        
+                        // Create marker with custom icon
+                        const marker = new google.maps.Marker({
+                            position: position,
+                            map: showHeatmap ? null : map,
+                            title: markerData.issue_type,
+                            icon: {
+                                path: google.maps.SymbolPath.CIRCLE,
+                                scale: 10,
+                                fillColor: markerColor,
+                                fillOpacity: 0.9,
+                                strokeColor: '#fff',
+                                strokeWeight: 2
+                            }
+                        });
+                        
+                        // Add click listener
+                        marker.addListener('click', () => {
+                            showMarkerInfo(marker, markerData);
+                        });
+                        
+                        markers.push(marker);
+                        
+                        // Add to heatmap data (weight based on status - unresolved issues are heavier)
+                        const statusWeights = { 'new': 10, 'verified': 5, 'resolved': 2 };
+                        heatmapData.push({
+                            location: new google.maps.LatLng(markerData.lat, markerData.lng),
+                            weight: statusWeights[markerData.status] || 5
+                        });
+                    });
+                    
+                    // Create/update heatmap layer
+                    if (heatmapLayer) {
+                        heatmapLayer.setMap(null);
+                    }
+                    
+                    heatmapLayer = new google.maps.visualization.HeatmapLayer({
+                        data: heatmapData,
+                        map: showHeatmap ? map : null,
+                        radius: 30,
+                        opacity: 0.7
+                    });
+                    
+                    // Update stats
+                    document.getElementById('total-count').textContent = data.count;
+                    document.getElementById('visible-count').textContent = data.count;
+                }
+            } catch (error) {
+                console.error('Failed to load markers:', error);
+            }
+        }
+        
+        // Clear all markers
+        function clearMarkers() {
+            markers.forEach(marker => marker.setMap(null));
+            markers = [];
+        }
+        
+        // Show marker info popup
+        function showMarkerInfo(marker, data) {
+            const issueTypes = {
+                'pothole': '🕳️ Pothole',
+                'broken_light': '💡 Broken Light',
+                'garbage': '🗑️ Garbage',
+                'waterlogging': '🌊 Waterlogging',
+                'other': '⚠️ Other Issue'
+            };
+            
+            const statusLabels = {
+                'new': '🔴 New',
+                'verified': '🟡 Verified',
+                'resolved': '🟢 Resolved'
+            };
+            
+            let imageHtml = '';
+            if (data.image_url) {
+                imageHtml = `<img src="${data.image_url}" alt="Issue photo" onerror="this.style.display='none'">`;
+            }
+            
+            const content = `
+                <div class="issue-popup">
+                    ${imageHtml}
+                    <h4>${issueTypes[data.issue_type] || data.issue_type}</h4>
+                    <span style="font-size: 12px;">${statusLabels[data.status] || data.status}</span>
+                    <p style="margin: 8px 0 0; font-size: 13px; color: #666;">
+                        ${data.description || 'No description provided'}
+                    </p>
+                    <p style="margin: 4px 0 0; font-size: 11px; color: #999;">
+                        Reported: ${formatDate(data.created_at)}
+                    </p>
+                </div>
+            `;
+            
+            infoWindow.setContent(content);
+            infoWindow.open(map, marker);
+        }
+        
+        function formatDate(dateStr) {
+            if (!dateStr) return 'Unknown';
+            const date = new Date(dateStr);
+            return date.toLocaleDateString();
+        }
+        
+        // Set up controls
+        function setupControls() {
+            // Heatmap toggle
+            document.getElementById('toggle-heatmap').addEventListener('click', function() {
+                showHeatmap = !showHeatmap;
+                this.classList.toggle('active', showHeatmap);
+                
+                // Toggle markers and heatmap
+                markers.forEach(m => m.setMap(showHeatmap ? null : map));
+                if (heatmapLayer) {
+                    heatmapLayer.setMap(showHeatmap ? map : null);
+                }
+            });
+            
+            // Locate me
+            document.getElementById('locate-me').addEventListener('click', () => locateUser(true));
+            
+            // Refresh
+            document.getElementById('refresh-data').addEventListener('click', loadMarkers);
+            
+            // Filters
+            document.querySelectorAll('.filter-chip').forEach(chip => {
+                chip.addEventListener('click', function() {
+                    const filterType = this.dataset.filter;
+                    const filterValue = this.dataset.value;
+                    
+                    // Update active state
+                    document.querySelectorAll(`.filter-chip[data-filter="${filterType}"]`).forEach(c => {
+                        c.classList.remove('active');
+                    });
+                    this.classList.add('active');
+                    
+                    // Update filter
+                    if (filterType === 'status') {
+                        currentFilters.status = filterValue;
+                    } else if (filterType === 'type') {
+                        currentFilters.type = filterValue;
+                    }
+                    
+                    // Reload markers
+                    loadMarkers();
+                });
+            });
+        }
+        
+        // Locate user
+        function locateUser(center) {
+            if (!navigator.geolocation) return;
+            
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const pos = {
+                        lat: position.coords.latitude,
+                        lng: position.coords.longitude
+                    };
+                    
+                    if (center && map) {
+                        map.setCenter(pos);
+                        map.setZoom(15);
+                    }
+                },
+                (error) => {
+                    console.log('Location error:', error);
+                },
+                { enableHighAccuracy: true }
+            );
+        }
+        
+        // Toggle filter panel
+        function toggleFilterPanel() {
+            document.getElementById('filter-panel').classList.toggle('expanded');
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#1a73e8">
+    <meta name="description" content="InfraBeacon - Report public infrastructure issues">
+    <title>InfraBeacon - Report Infrastructure Issues</title>
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/static/manifest.json">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏗️</text></svg>">
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="app-header">
+        <div class="header-content">
+            <h1 class="app-title">
+                <span class="icon">🏗️</span>
+                InfraBeacon
+            </h1>
+            <p class="app-tagline">Report Infrastructure Issues</p>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Hero Section -->
+        <section class="hero">
+            <div class="hero-content">
+                <h2>Help Improve Your City</h2>
+                <p>Report potholes, broken lights, garbage, and other infrastructure issues in your neighborhood.</p>
+            </div>
+        </section>
+
+        <!-- Quick Actions -->
+        <section class="actions">
+            <a href="/report" class="action-card primary">
+                <span class="action-icon">📸</span>
+                <span class="action-title">Report Issue</span>
+                <span class="action-desc">Take a photo and report</span>
+            </a>
+            
+            <a href="/map" class="action-card">
+                <span class="action-icon">🗺️</span>
+                <span class="action-title">View Map</span>
+                <span class="action-desc">See all reported issues</span>
+            </a>
+            
+            <a href="/auth/login" class="action-card">
+                <span class="action-icon">🔐</span>
+                <span class="action-title">Admin Login</span>
+                <span class="action-desc">Staff access only</span>
+            </a>
+        </section>
+
+        <!-- Issue Types -->
+        <section class="issue-types">
+            <h3>What Can You Report?</h3>
+            <div class="type-grid">
+                <div class="type-card">
+                    <span class="type-icon">🕳️</span>
+                    <span class="type-name">Potholes</span>
+                </div>
+                <div class="type-card">
+                    <span class="type-icon">💡</span>
+                    <span class="type-name">Broken Lights</span>
+                </div>
+                <div class="type-card">
+                    <span class="type-icon">🗑️</span>
+                    <span class="type-name">Garbage</span>
+                </div>
+                <div class="type-card">
+                    <span class="type-icon">🌊</span>
+                    <span class="type-name">Waterlogging</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- How It Works -->
+        <section class="how-it-works">
+            <h3>How It Works</h3>
+            <ol class="steps">
+                <li>
+                    <span class="step-number">1</span>
+                    <div class="step-content">
+                        <strong>Take a Photo</strong>
+                        <p>Capture the infrastructure issue with your phone camera</p>
+                    </div>
+                </li>
+                <li>
+                    <span class="step-number">2</span>
+                    <div class="step-content">
+                        <strong>Auto-Locate</strong>
+                        <p>GPS automatically captures the exact location</p>
+                    </div>
+                </li>
+                <li>
+                    <span class="step-number">3</span>
+                    <div class="step-content">
+                        <strong>AI Analysis</strong>
+                        <p>Our AI identifies the issue type and severity</p>
+                    </div>
+                </li>
+                <li>
+                    <span class="step-number">4</span>
+                    <div class="step-content">
+                        <strong>Track Progress</strong>
+                        <p>Follow your report from new to resolved</p>
+                    </div>
+                </li>
+            </ol>
+        </section>
+
+        <!-- Stats Preview -->
+        <section class="stats-preview" id="stats-section">
+            <h3>Community Impact</h3>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <span class="stat-value" id="total-reports">-</span>
+                    <span class="stat-label">Reports Filed</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value" id="resolved-reports">-</span>
+                    <span class="stat-label">Issues Resolved</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value" id="pending-reports">-</span>
+                    <span class="stat-label">Pending Review</span>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+        <p>Built with Google Cloud technologies</p>
+        <div class="tech-stack">
+            <span>Flask</span>
+            <span>•</span>
+            <span>Cloud Run</span>
+            <span>•</span>
+            <span>Firestore</span>
+            <span>•</span>
+            <span>Gemini AI</span>
+        </div>
+    </footer>
+
+    <script>
+        // Load stats on page load
+        async function loadStats() {
+            try {
+                const response = await fetch('/map/api/stats');
+                const data = await response.json();
+                
+                if (data.success) {
+                    document.getElementById('total-reports').textContent = data.stats.total;
+                    document.getElementById('resolved-reports').textContent = data.stats.by_status.resolved;
+                    document.getElementById('pending-reports').textContent = 
+                        data.stats.by_status.new + data.stats.by_status.verified;
+                }
+            } catch (error) {
+                console.error('Failed to load stats:', error);
+            }
+        }
+        
+        // Load stats when page is ready
+        document.addEventListener('DOMContentLoaded', loadStats);
+    </script>
+</body>
+</html>
