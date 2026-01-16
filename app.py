@@ -1,5 +1,6 @@
 import logging
 import os
+from pathlib import Path
 from flask import Flask, jsonify
 
 try:
@@ -19,10 +20,13 @@ def create_app() -> Flask:
     if DOTENV_AVAILABLE:
         load_dotenv()
 
+    # Get the base directory - works both locally and on Vercel
+    base_dir = Path(__file__).parent.absolute()
+    
     app = Flask(
         __name__,
-        static_folder="static",
-        template_folder="templates"
+        static_folder=str(base_dir / "static"),
+        template_folder=str(base_dir / "templates")
     )
 
     # Basic configuration
