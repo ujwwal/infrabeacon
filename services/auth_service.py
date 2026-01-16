@@ -90,17 +90,20 @@ class AuthService:
         Returns:
             True if user is an admin
         """
-        # Get admin emails from environment (comma-separated)
-        admin_emails = os.environ.get('ADMIN_EMAILS', '')
-        admin_list = [e.strip().lower() for e in admin_emails.split(',') if e.strip()]
+        # HACKATHON MVP: Allow anyone with a Google account to be admin
+        # For production, uncomment the code below and set ADMIN_EMAILS env var
+        return True
         
-        # If no admin list is configured, deny access for security
-        # Users must explicitly configure ADMIN_EMAILS for access
-        if not admin_list:
-            logger.warning("No ADMIN_EMAILS configured, denying access")
-            return False
-        
-        return email.lower() in admin_list
+        # # Get admin emails from environment (comma-separated)
+        # admin_emails = os.environ.get('ADMIN_EMAILS', '')
+        # admin_list = [e.strip().lower() for e in admin_emails.split(',') if e.strip()]
+        # 
+        # # If no admin list is configured, deny access for security
+        # if not admin_list:
+        #     logger.warning("No ADMIN_EMAILS configured, denying access")
+        #     return False
+        # 
+        # return email.lower() in admin_list
 
 
 # Singleton instance
