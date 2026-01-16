@@ -13,7 +13,7 @@ import base64
 
 # Google Generative AI (Gemini)
 try:
-    import google.generativeai as genai
+    from google import genai
     GEMINI_AVAILABLE = True
 except ImportError:
     GEMINI_AVAILABLE = False
@@ -46,20 +46,20 @@ class GeminiService:
         
         if GEMINI_AVAILABLE and self.api_key:
             try:
-                genai.configure(api_key=self.api_key)
-                self.model = genai.GenerativeModel('gemini-3-pro-preview')
+                self.client = genai.Client(api_key=self.api_key)
+                self.model_name = 'gemini-2.0-flash-exp'
                 self.enabled = True
                 logger.info("Gemini client initialized successfully")
             except Exception as e:
                 logger.warning(f"Failed to initialize Gemini: {e}")
-                self.model = None
+                self.client = None
                 self.enabled = False
         else:
             if not GEMINI_AVAILABLE:
                 logger.warning("Gemini SDK not available")
             elif not self.api_key:
                 logger.warning("GEMINI_API_KEY not set")
-            self.model = None
+            self.client = None
             self.enabled = False
     
     def analyze_image(self, image_data: bytes, 
@@ -74,16 +74,13 @@ class GeminiService:
         Returns:
             Analysis result with issue_type, severity, and description
         """
-        if not self.enabled or not self.model:
+        if not self.enabled or not self.client:
             # Return mock analysis for development
             return self._mock_analysis()
         
         try:
-            # Create the image part for Gemini
-            image_part = {
-                'mime_type': mime_type,
-                'data': base64.b64encode(image_data).decode('utf-8')
-            }
+            # Convert image data to base64
+            image_b64 = base64.b64encode(image_data).decode('utf-8')
             
             # Analysis prompt
             prompt = """Analyze this image and determine if it shows any public infrastructure issue.
@@ -111,8 +108,19 @@ Consider these severity criteria:
 - medium: Significant inconvenience, should be fixed soon
 - low: Minor issue, can be scheduled for routine maintenance"""
             
-            # Generate response
-            response = self.model.generate_content([prompt, image_part])
+            # Generate response using new API
+            response = self.client.models.generate_content(
+                model=self.model_name,
+                contents=[
+                    prompt,
+                    {
+                        "inline_data": {
+                            "mime_type": mime_type,
+                            "data": image_b64
+                        }
+                    }
+                ]
+            )
             
             # Parse the response
             result = self._parse_analysis_response(response.text)
@@ -168,7 +176,7 @@ Consider these severity criteria:
         Returns:
             Comparison result with is_duplicate and confidence
         """
-        if not self.enabled or not self.model:
+        if not self.enabled or not self.client:
             # Mock response based on distance
             is_duplicate = distance_meters < 10
             return {
@@ -178,14 +186,8 @@ Consider these severity criteria:
             }
         
         try:
-            image1_part = {
-                'mime_type': 'image/jpeg',
-                'data': base64.b64encode(image1_data).decode('utf-8')
-            }
-            image2_part = {
-                'mime_type': 'image/jpeg',
-                'data': base64.b64encode(image2_data).decode('utf-8')
-            }
+            image1_b64 = base64.b64encode(image1_data).decode('utf-8')
+            image2_b64 = base64.b64encode(image2_data).decode('utf-8')
             
             prompt = f"""Compare these two images of reported infrastructure issues.
 They were taken {distance_meters:.1f} meters apart.
@@ -204,7 +206,24 @@ Respond in JSON format:
     "reasoning": "Explanation of your determination"
 }}"""
             
-            response = self.model.generate_content([prompt, image1_part, image2_part])
+            response = self.client.models.generate_content(
+                model=self.model_name,
+                contents=[
+                    prompt,
+                    {
+                        "inline_data": {
+                            "mime_type": "image/jpeg",
+                            "data": image1_b64
+                        }
+                    },
+                    {
+                        "inline_data": {
+                            "mime_type": "image/jpeg",
+                            "data": image2_b64
+                        }
+                    }
+                ]
+            )
             
             return self._parse_duplicate_response(response.text)
             
