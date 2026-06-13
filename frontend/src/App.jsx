@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import NeumorphicCard from './components/NeumorphicCard';
 import NeumorphicButton from './components/NeumorphicButton';
 import {
-  LeafIcon,
+  BeaconIcon,
   SearchIcon,
   CameraIcon,
   PinIcon,
@@ -103,21 +103,40 @@ const MiniMap = ({ lat = 50, lng = 50 }) => (
 );
 
 function App() {
-  const [activeTab, setActiveTab] = useState('home'); // home, map, notifications, profile, admin
+  const [activeTab, setActiveTab] = useState('home'); // home, map, notifications, profile, admin, report, admin-login
   const [searchQuery, setSearchQuery] = useState('');
   
   // Reporting Camera State
-  const [showForm, setShowForm] = useState(false);
   const [cameraViewfinder, setCameraViewfinder] = useState(false);
   const [capturedPhoto, setCapturedPhoto] = useState(null); // 'pothole', 'light', 'garbage', 'drainage', null
   const [formTitle, setFormTitle] = useState('Pothole');
   const [formLocation, setFormLocation] = useState('');
 
+  // Geotagging State
+  const [isGeotagging, setIsGeotagging] = useState(false);
+  const [geotagged, setGeotagged] = useState(false);
+
+  // Admin Dashboard States
+  const [adminSubView, setAdminSubView] = useState('list'); // list, map
+  const [adminFilterStatus, setAdminFilterStatus] = useState('All');
+  const [adminFilterType, setAdminFilterType] = useState('All');
+  const [adminFilterSeverity, setAdminFilterSeverity] = useState('All');
+  const [adminSortOption, setAdminSortOption] = useState('date-desc');
+
   // Admin Authentication State
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
-  const [showAdminLogin, setShowAdminLogin] = useState(false);
   const [adminUsername, setAdminUsername] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
+  const [activeTicketFormIssueId, setActiveTicketFormIssueId] = useState(null);
+  const [activeResolveFormIssueId, setActiveResolveFormIssueId] = useState(null);
+  const [formSeverity, setFormSeverity] = useState('Medium');
+
+  // New Admin panel simulation states
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [showHeatmap, setShowHeatmap] = useState(false);
+  const [showUserLocation, setShowUserLocation] = useState(false);
+  const [activeMapPopup, setActiveMapPopup] = useState(null);
+  const [activeImageModal, setActiveImageModal] = useState(null);
 
   // List of issues state
   const [issues, setIssues] = useState([
@@ -132,7 +151,9 @@ function App() {
       hasUpvoted: false,
       lat: 48,
       lng: 48,
-      photoType: 'pothole'
+      photoType: 'pothole',
+      ticket: null,
+      severity: 'High'
     },
     {
       id: 2,
@@ -145,7 +166,15 @@ function App() {
       hasUpvoted: false,
       lat: 72,
       lng: 52,
-      photoType: 'light'
+      photoType: 'light',
+      severity: 'Medium',
+      ticket: {
+        ticketId: 'TK-4821',
+        department: 'Roads & Traffic',
+        priority: 'Medium',
+        scheduledDate: '2026-06-16',
+        notes: 'Replace the cracked LED luminaire and verify connection.'
+      }
     }
   ]);
 
@@ -167,6 +196,25 @@ function App() {
       }
       return issue;
     }));
+  };
+
+  const triggerGeotagging = () => {
+    setIsGeotagging(true);
+    setGeotagged(false);
+    setTimeout(() => {
+      setIsGeotagging(false);
+      setGeotagged(true);
+      const mockAddresses = [
+        '88 Pine Crest Blvd',
+        '104 Elmwood Ave',
+        '15 Maple Rd',
+        '242 Riverdale Rd',
+        '67 Oak Ridge Ln',
+        '302 Sycamore Dr'
+      ];
+      const selectedAddress = mockAddresses[Math.floor(Math.random() * mockAddresses.length)];
+      setFormLocation(selectedAddress + ' (Geotagged)');
+    }, 1800);
   };
 
   const handleAddIssue = (e) => {
@@ -192,7 +240,9 @@ function App() {
       hasUpvoted: false,
       lat: 35 + Math.random() * 45,
       lng: 35 + Math.random() * 45,
-      photoType: finalPhoto
+      photoType: finalPhoto,
+      ticket: null,
+      severity: formSeverity
     };
 
     setIssues([newIssue, ...issues]);
@@ -206,7 +256,10 @@ function App() {
     // Reset Form
     setFormLocation('');
     setCapturedPhoto(null);
-    setShowForm(false);
+    setGeotagged(false);
+    setIsGeotagging(false);
+    setFormSeverity('Medium');
+    setActiveTab('home');
   };
 
   const startCamera = () => {
@@ -221,19 +274,60 @@ function App() {
     
     setCapturedPhoto(mockType);
     setCameraViewfinder(false);
+    
+    // Auto trigger geotagging on capture
+    triggerGeotagging();
   };
 
   const handleAdminLoginSubmit = (e) => {
     e.preventDefault();
     if (adminUsername === 'admin' && adminPassword === 'admin') {
       setIsAdminLoggedIn(true);
-      setShowAdminLogin(false);
       setAdminUsername('');
       setAdminPassword('');
       setActiveTab('admin');
     } else {
       alert('Invalid admin credentials! (Use admin/admin)');
     }
+  };
+
+  const handleCreateTicket = (e, issueId) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const department = formData.get('department');
+    const priority = formData.get('priority');
+    const scheduledDate = formData.get('scheduledDate');
+    const notes = formData.get('notes');
+    const ticketId = 'TK-' + Math.floor(1000 + Math.random() * 9000);
+
+    setIssues(issues.map(issue => {
+      if (issue.id === issueId) {
+        return {
+          ...issue,
+          status: 'In Progress',
+          ticket: {
+            ticketId,
+            department,
+            priority,
+            scheduledDate,
+            notes
+          }
+        };
+      }
+      return issue;
+    }));
+
+    setNotifications([
+      {
+        id: Date.now(),
+        text: `Work Ticket #${ticketId} created for "${issues.find(i => i.id === issueId)?.title}" at ${issues.find(i => i.id === issueId)?.location}.`,
+        time: 'Just now',
+        unread: true
+      },
+      ...notifications
+    ]);
+
+    setActiveTicketFormIssueId(null);
   };
 
   const updateIssueStatus = (id, newStatus) => {
@@ -256,6 +350,7 @@ function App() {
   };
 
   const deleteIssue = (id) => {
+    if (!window.confirm('Are you sure you want to delete this report? This action cannot be undone.')) return;
     const reportToDelete = issues.find(i => i.id === id);
     setIssues(issues.filter(issue => issue.id !== id));
     if (reportToDelete) {
@@ -265,6 +360,120 @@ function App() {
       ]);
     }
   };
+
+  const triggerRefresh = () => {
+    setIsRefreshing(true);
+    setTimeout(() => {
+      setIsRefreshing(false);
+    }, 800);
+  };
+
+  const handleResolveSubmit = (e, id) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const notes = formData.get('resolutionNotes') || 'Marked as resolved by admin';
+    
+    setIssues(issues.map(issue => {
+      if (issue.id === id) {
+        const notesText = notes.trim() || 'Marked as resolved by admin';
+        
+        const newAlert = {
+          id: Date.now(),
+          text: `InfraBeacon Alert: "${issue.title}" at ${issue.location} has been marked "Resolved" with notes: "${notesText}".`,
+          time: 'Just now',
+          unread: true
+        };
+        setNotifications([newAlert, ...notifications]);
+        
+        return { 
+          ...issue, 
+          status: 'Resolved',
+          resolutionNotes: notesText
+        };
+      }
+      return issue;
+    }));
+    
+    setActiveResolveFormIssueId(null);
+    if (activeMapPopup && activeMapPopup.id === id) {
+      setActiveMapPopup(null);
+    }
+  };
+
+  const getBadgeStyle = (type, value) => {
+    const normalizedValue = String(value).toLowerCase();
+    
+    if (type === 'issue_type') {
+      if (normalizedValue.includes('pothole')) {
+        return { backgroundColor: '#e3f2fd', color: '#1565c0' };
+      } else if (normalizedValue.includes('light')) {
+        return { backgroundColor: '#fff3e0', color: '#e65100' };
+      } else if (normalizedValue.includes('garbage')) {
+        return { backgroundColor: '#f3e5f5', color: '#7b1fa2' };
+      } else if (normalizedValue.includes('drainage') || normalizedValue.includes('waterlogging')) {
+        return { backgroundColor: '#e0f7fa', color: '#00838f' };
+      } else {
+        return { backgroundColor: '#f5f5f5', color: '#616161' };
+      }
+    }
+    
+    if (type === 'severity') {
+      if (normalizedValue === 'high') {
+        return { backgroundColor: '#ffebee', color: '#c62828' };
+      } else if (normalizedValue === 'medium') {
+        return { backgroundColor: '#fff3e0', color: '#ef6c00' };
+      } else {
+        return { backgroundColor: '#e8f5e9', color: '#2e7d32' };
+      }
+    }
+    
+    if (type === 'status') {
+      if (normalizedValue === 'submitted' || normalizedValue === 'new') {
+        return { backgroundColor: '#ffebee', color: '#c62828' };
+      } else if (normalizedValue === 'approved' || normalizedValue === 'verified' || normalizedValue === 'in progress') {
+        return { backgroundColor: '#fff8e1', color: '#f57f17' };
+      } else {
+        return { backgroundColor: '#e8f5e9', color: '#2e7d32' };
+      }
+    }
+    
+    return { backgroundColor: '#f5f5f5', color: '#616161' };
+  };
+
+  const getStatusLabel = (status) => {
+    const norm = status.toLowerCase();
+    if (norm === 'submitted' || norm === 'new') return '🔴 New';
+    if (norm === 'approved' || norm === 'verified') return '🟡 Verified';
+    if (norm === 'in progress') return '🟠 In Progress';
+    if (norm === 'resolved') return '🟢 Resolved';
+    return status;
+  };
+
+  const getTypeLabel = (type) => {
+    const norm = type.toLowerCase();
+    if (norm.includes('pothole')) return '🕳️ Pothole';
+    if (norm.includes('light')) return '💡 Broken Light';
+    if (norm.includes('garbage')) return '🗑️ Garbage';
+    if (norm.includes('drainage') || norm.includes('waterlogging')) return '🌊 Waterlogging';
+    return '⚠️ Other';
+  };
+
+  const renderLargePhoto = (photoType) => {
+    return (
+      <div style={{ 
+        width: '320px', 
+        height: '320px', 
+        borderRadius: '24px', 
+        overflow: 'hidden', 
+        border: '4px solid #FFFFFF', 
+        boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
+        backgroundColor: '#FFF'
+      }}>
+        {renderPhotoThumbnail(photoType)}
+      </div>
+    );
+  };
+
 
   // Filter issues based on search
   const filteredIssues = issues.filter(issue => 
@@ -293,115 +502,46 @@ function App() {
         <div className="scrollable-content">
 
           {/* Top Lock/Admin Indicator */}
-          <div style={{
-            position: 'absolute',
-            top: '32px',
-            right: '26px',
-            zIndex: 15
-          }}>
-            <button 
-              onClick={() => {
-                if (isAdminLoggedIn) {
-                  setIsAdminLoggedIn(false);
-                  setActiveTab('home');
-                } else {
-                  setShowAdminLogin(true);
-                }
-              }}
-              style={{
-                border: 'none',
-                outline: 'none',
-                width: '40px',
-                height: '40px',
-                borderRadius: '50%',
-                backgroundColor: 'var(--bg-color)',
-                boxShadow: 'var(--shadow-extruded-sm)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                color: isAdminLoggedIn ? '#2E7D32' : 'var(--text-light)',
-                transition: 'all 0.2s ease'
-              }}
-              onMouseDown={(e) => e.currentTarget.style.boxShadow = 'var(--shadow-pressed)'}
-              onMouseUp={(e) => e.currentTarget.style.boxShadow = 'var(--shadow-extruded-sm)'}
-            >
-              {isAdminLoggedIn ? <UnlockIcon size={18} color="#2E7D32" /> : <LockIcon size={18} color="var(--text-light)" />}
-            </button>
-          </div>
-
-          {/* Admin Login Dialog sheet */}
-          {showAdminLogin && (
+          {activeTab !== 'report' && activeTab !== 'admin-login' && activeTab !== 'admin' && (
             <div style={{
               position: 'absolute',
-              top: '0',
-              left: '0',
-              right: '0',
-              bottom: '0',
-              backgroundColor: 'rgba(236, 243, 240, 0.95)',
-              zIndex: 30,
-              padding: '40px 30px',
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'center'
+              top: '32px',
+              right: '26px',
+              zIndex: 15
             }}>
-              <NeumorphicCard padding="24px">
-                <form onSubmit={handleAdminLoginSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  <h3 className="title-serif" style={{ fontSize: '1.3rem', textAlign: 'center', marginBottom: '8px' }}>Admin Login</h3>
-                  
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <label style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-light)' }}>USERNAME</label>
-                    <input
-                      type="text"
-                      placeholder="Username"
-                      value={adminUsername}
-                      onChange={(e) => setAdminUsername(e.target.value)}
-                      required
-                      style={{
-                        padding: '12px 16px',
-                        borderRadius: '14px',
-                        border: 'none',
-                        outline: 'none',
-                        backgroundColor: 'var(--bg-color)',
-                        boxShadow: 'var(--shadow-pressed)',
-                        fontFamily: 'Outfit, sans-serif'
-                      }}
-                    />
-                  </div>
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <label style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-light)' }}>PASSWORD</label>
-                    <input
-                      type="password"
-                      placeholder="Password"
-                      value={adminPassword}
-                      onChange={(e) => setAdminPassword(e.target.value)}
-                      required
-                      style={{
-                        padding: '12px 16px',
-                        borderRadius: '14px',
-                        border: 'none',
-                        outline: 'none',
-                        backgroundColor: 'var(--bg-color)',
-                        boxShadow: 'var(--shadow-pressed)',
-                        fontFamily: 'Outfit, sans-serif'
-                      }}
-                    />
-                  </div>
-
-                  <div style={{ display: 'flex', gap: '12px', marginTop: '10px' }}>
-                    <NeumorphicButton type="submit" primary={true} style={{ flex: 1, padding: '12px' }}>
-                      Login
-                    </NeumorphicButton>
-                    <NeumorphicButton type="button" onClick={() => setShowAdminLogin(false)} style={{ flex: 1, padding: '12px' }}>
-                      Cancel
-                    </NeumorphicButton>
-                  </div>
-                  <p style={{ fontSize: '0.75rem', color: 'var(--text-light)', textAlign: 'center', marginTop: '4px' }}>
-                    Bypass Hint: Use <strong>admin</strong> / <strong>admin</strong>
-                  </p>
-                </form>
-              </NeumorphicCard>
+              <button 
+                onClick={() => {
+                  if (isAdminLoggedIn) {
+                    if (activeTab === 'admin') {
+                      setIsAdminLoggedIn(false);
+                      setActiveTab('home');
+                    } else {
+                      setActiveTab('admin');
+                    }
+                  } else {
+                    setActiveTab('admin-login');
+                  }
+                }}
+                style={{
+                  border: 'none',
+                  outline: 'none',
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '50%',
+                  backgroundColor: 'var(--bg-color)',
+                  boxShadow: 'var(--shadow-extruded-sm)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  color: isAdminLoggedIn ? '#2E7D32' : 'var(--text-light)',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseDown={(e) => e.currentTarget.style.boxShadow = 'var(--shadow-pressed)'}
+                onMouseUp={(e) => e.currentTarget.style.boxShadow = 'var(--shadow-extruded-sm)'}
+              >
+                {isAdminLoggedIn ? <UnlockIcon size={18} color="#2E7D32" /> : <LockIcon size={18} color="var(--text-light)" />}
+              </button>
             </div>
           )}
 
@@ -499,11 +639,11 @@ function App() {
               {/* Header */}
               <header style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', marginBottom: '28px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                  <LeafIcon size={34} fill="var(--accent-color)" stroke="var(--accent-color)" strokeWidth={1.8} />
+                  <BeaconIcon size={34} fill="var(--accent-color)" stroke="var(--accent-color)" strokeWidth={1.8} />
                   <h1 className="title-serif" style={{ fontSize: '2.1rem', letterSpacing: '-0.5px' }}>InfraBeacon</h1>
                 </div>
-                <p style={{ color: 'var(--text-light)', fontSize: '0.85rem', fontWeight: '500', maxWidth: '280px', lineHeight: '1.3' }}>
-                  Community-focused reporting for a better neighborhood
+                <p style={{ color: 'var(--text-light)', fontSize: '0.85rem', fontWeight: '600', maxWidth: '300px', lineHeight: '1.3' }}>
+                  AI-Powered Infrastructure Reporting Platform
                 </p>
               </header>
 
@@ -549,169 +689,64 @@ function App() {
                 </div>
               </div>
 
-              {/* Report New Issue Trigger/Form */}
-              {!showForm ? (
-                <div 
-                  onClick={() => setShowForm(true)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    padding: '16px 20px',
-                    borderRadius: '24px',
-                    backgroundColor: 'var(--bg-color)',
-                    boxShadow: 'var(--shadow-extruded)',
-                    cursor: 'pointer',
-                    marginBottom: '28px',
-                    transition: 'all 0.2s ease',
-                  }}
-                >
-                  {/* Sunken Camera Circle */}
+              {/* Report New Issue Trigger */}
+              <div 
+                onClick={() => setActiveTab('report')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '16px 20px',
+                  borderRadius: '24px',
+                  backgroundColor: 'var(--bg-color)',
+                  boxShadow: 'var(--shadow-extruded)',
+                  cursor: 'pointer',
+                  marginBottom: '28px',
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                {/* Sunken Camera Circle */}
+                <div style={{
+                  position: 'relative',
+                  width: '54px',
+                  height: '54px',
+                  borderRadius: '50%',
+                  boxShadow: 'var(--shadow-pressed-deep)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: 'var(--bg-color)',
+                  marginRight: '20px',
+                  flexShrink: 0
+                }}>
+                  <CameraIcon size={24} color="var(--accent-color)" />
                   <div style={{
-                    position: 'relative',
-                    width: '54px',
-                    height: '54px',
+                    position: 'absolute',
+                    bottom: '-2px',
+                    right: '-2px',
+                    width: '20px',
+                    height: '20px',
                     borderRadius: '50%',
-                    boxShadow: 'var(--shadow-pressed-deep)',
+                    backgroundColor: 'var(--accent-light)',
+                    border: '2px solid var(--bg-color)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    backgroundColor: 'var(--bg-color)',
-                    marginRight: '20px',
-                    flexShrink: 0
+                    boxShadow: 'var(--shadow-extruded-sm)'
                   }}>
-                    <CameraIcon size={24} color="var(--accent-color)" />
-                    <div style={{
-                      position: 'absolute',
-                      bottom: '-2px',
-                      right: '-2px',
-                      width: '20px',
-                      height: '20px',
-                      borderRadius: '50%',
-                      backgroundColor: 'var(--accent-light)',
-                      border: '2px solid var(--bg-color)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      boxShadow: 'var(--shadow-extruded-sm)'
-                    }}>
-                      <PlusIcon size={10} color="var(--accent-color)" />
-                    </div>
+                    <PlusIcon size={10} color="var(--accent-color)" />
                   </div>
-                  
-                  <span style={{
-                    fontFamily: 'Outfit, sans-serif',
-                    fontWeight: '700',
-                    fontSize: '0.98rem',
-                    letterSpacing: '0.8px',
-                    color: 'var(--accent-color)',
-                  }}>
-                    REPORT NEW ISSUE
-                  </span>
                 </div>
-              ) : (
-                <NeumorphicCard padding="20px" style={{ marginBottom: '28px' }}>
-                  <form onSubmit={handleAddIssue} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                    <h3 style={{ fontSize: '1.1rem', marginBottom: '4px' }} className="title-serif">File a New Report</h3>
-                    
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      <label style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-light)' }}>ISSUE TYPE</label>
-                      <select
-                        value={formTitle}
-                        onChange={(e) => {
-                          setFormTitle(e.target.value);
-                          setCapturedPhoto(null); // Reset snap if type changes
-                        }}
-                        style={{
-                          padding: '12px 16px',
-                          borderRadius: '14px',
-                          border: 'none',
-                          outline: 'none',
-                          backgroundColor: 'var(--bg-color)',
-                          boxShadow: 'var(--shadow-pressed)',
-                          fontFamily: 'Outfit, sans-serif',
-                          fontSize: '0.9rem',
-                          color: 'var(--text-main)',
-                          fontWeight: '500',
-                          appearance: 'none',
-                          backgroundImage: 'url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%235B856D\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'%3e%3cpolyline points=\'6 9 12 15 18 9\'%3e%3c/polyline%3e%3c/svg%3e")',
-                          backgroundRepeat: 'no-repeat',
-                          backgroundPosition: 'right 16px center',
-                          backgroundSize: '16px'
-                        }}
-                      >
-                        <option>Pothole</option>
-                        <option>Broken Streetlight</option>
-                        <option>Overflowing Garbage</option>
-                        <option>Blocked Drainage</option>
-                        <option>Other Issue</option>
-                      </select>
-                    </div>
-
-                    {/* Interactive camera capture trigger in report form */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      <label style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-light)' }}>CAPTURE PROOF</label>
-                      <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
-                        <button
-                          type="button"
-                          onClick={startCamera}
-                          style={{
-                            width: '64px',
-                            height: '64px',
-                            borderRadius: '16px',
-                            border: 'none',
-                            outline: 'none',
-                            backgroundColor: 'var(--bg-color)',
-                            boxShadow: 'var(--shadow-extruded-sm)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            cursor: 'pointer',
-                            color: 'var(--accent-color)',
-                            overflow: 'hidden'
-                          }}
-                        >
-                          {capturedPhoto ? renderPhotoThumbnail(capturedPhoto) : <CameraIcon size={24} />}
-                        </button>
-                        <span style={{ fontSize: '0.82rem', fontWeight: '500', color: capturedPhoto ? 'var(--text-main)' : 'var(--text-light)' }}>
-                          {capturedPhoto ? '📸 Photo captured successfully!' : '📷 Tap photo square to open camera'}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      <label style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-light)' }}>LOCATION</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. 15 Maple Rd"
-                        value={formLocation}
-                        onChange={(e) => setFormLocation(e.target.value)}
-                        required
-                        style={{
-                          padding: '12px 16px',
-                          borderRadius: '14px',
-                          border: 'none',
-                          outline: 'none',
-                          backgroundColor: 'var(--bg-color)',
-                          boxShadow: 'var(--shadow-pressed)',
-                          fontFamily: 'Outfit, sans-serif',
-                          fontSize: '0.9rem',
-                          color: 'var(--text-main)',
-                          fontWeight: '500'
-                        }}
-                      />
-                    </div>
-
-                    <div style={{ display: 'flex', gap: '12px', marginTop: '6px' }}>
-                      <NeumorphicButton type="submit" primary={true} style={{ flex: 1, padding: '12px' }}>
-                        Submit
-                      </NeumorphicButton>
-                      <NeumorphicButton type="button" onClick={() => setShowForm(false)} style={{ flex: 1, padding: '12px' }}>
-                        Cancel
-                      </NeumorphicButton>
-                    </div>
-                  </form>
-                </NeumorphicCard>
-              )}
+                
+                <span style={{
+                  fontFamily: 'Outfit, sans-serif',
+                  fontWeight: '700',
+                  fontSize: '0.98rem',
+                  letterSpacing: '0.8px',
+                  color: 'var(--accent-color)',
+                }}>
+                  REPORT NEW ISSUE
+                </span>
+              </div>
 
               {/* List Heading */}
               <h2 style={{
@@ -769,7 +804,19 @@ function App() {
                               {issue.status === 'Submitted' ? <MailIcon size={13} color="var(--text-light)" /> : <SyncIcon size={13} color="var(--text-light)" />}
                             </span>
                             <span style={{ fontSize: '0.82rem', fontWeight: '500' }}>
-                              Status: <span style={{ fontWeight: '600', color: issue.status === 'Resolved' ? '#2E7D32' : 'var(--text-main)' }}>{issue.status}</span>
+                              Status: <span style={{ fontWeight: '600', color: issue.status === 'Resolved' ? '#2E7D32' : issue.status === 'Approved' ? '#1976D2' : 'var(--text-main)' }}>{issue.status}</span>
+                            </span>
+                          </div>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-light)' }}>
+                            <WarningIcon size={13} color="var(--text-light)" />
+                            <span style={{ fontSize: '0.82rem', fontWeight: '500' }}>
+                              Severity: <span style={{
+                                fontWeight: '600',
+                                color: 
+                                  issue.severity === 'High' ? '#C62828' :
+                                  issue.severity === 'Medium' ? '#E65100' : '#2E7D32'
+                              }}>{issue.severity || 'Medium'}</span>
                             </span>
                           </div>
                         </div>
@@ -777,6 +824,59 @@ function App() {
                         {/* Right: Map Thumbnail */}
                         <MiniMap lat={issue.lat} lng={issue.lng} />
                       </div>
+
+                      {/* Ticket Details (if exists) */}
+                      {issue.ticket && (
+                        <div style={{
+                          marginTop: '12px',
+                          padding: '12px 14px',
+                          borderRadius: '16px',
+                          backgroundColor: 'var(--accent-light)',
+                          border: '1.5px solid rgba(91,133,109,0.3)',
+                          boxShadow: 'var(--shadow-pressed)',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '6px',
+                          animation: 'fadeIn 0.3s ease'
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: '0.78rem', fontWeight: '700', color: 'var(--accent-color)', letterSpacing: '0.5px' }}>
+                              🎫 TICKET: {issue.ticket.ticketId}
+                            </span>
+                            <span style={{
+                              fontSize: '0.7rem',
+                              fontWeight: '700',
+                              padding: '2px 6px',
+                              borderRadius: '6px',
+                              backgroundColor: 
+                                issue.ticket.priority === 'Critical' || issue.ticket.priority === 'High' ? '#FFEBEE' : 
+                                issue.ticket.priority === 'Medium' ? '#FFF3E0' : '#E8F5E9',
+                              color: 
+                                issue.ticket.priority === 'Critical' || issue.ticket.priority === 'High' ? '#C62828' : 
+                                issue.ticket.priority === 'Medium' ? '#E65100' : '#2E7D32'
+                            }}>
+                              {issue.ticket.priority} Priority
+                            </span>
+                          </div>
+                          
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', fontSize: '0.8rem', color: 'var(--text-main)' }}>
+                            <div><strong>Assigned Dept:</strong> {issue.ticket.department}</div>
+                            <div><strong>Schedule Date:</strong> {issue.ticket.scheduledDate}</div>
+                            {issue.ticket.notes && (
+                              <div style={{ 
+                                fontSize: '0.75rem', 
+                                color: 'var(--text-light)', 
+                                fontStyle: 'italic',
+                                marginTop: '2px',
+                                borderLeft: '2px solid var(--accent-color)',
+                                paddingLeft: '6px'
+                              }}>
+                                "{issue.ticket.notes}"
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
 
                       {/* Footer Row: Upvote Badge */}
                       <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '6px' }}>
@@ -827,100 +927,1209 @@ function App() {
           {/* ADMIN SCREEN */}
           {activeTab === 'admin' && (
             <div>
-              <header style={{ marginBottom: '20px' }}>
-                <h1 className="title-serif" style={{ fontSize: '1.8rem', textAlign: 'center' }}>Admin Dashboard</h1>
-                <p style={{ color: '#2E7D32', fontSize: '0.82rem', textAlign: 'center', fontWeight: '600' }}>✓ LOGGED IN AS ADMINISTRATOR</p>
+              {/* Header mimicking the Flask app layout */}
+              <header style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'space-between',
+                marginBottom: '20px',
+                paddingBottom: '12px',
+                borderBottom: '1.5px solid var(--shadow-dark)'
+              }}>
+                <button 
+                  onClick={() => setActiveTab('home')}
+                  style={{
+                    border: 'none',
+                    outline: 'none',
+                    width: '38px',
+                    height: '38px',
+                    borderRadius: '50%',
+                    backgroundColor: 'var(--bg-color)',
+                    boxShadow: 'var(--shadow-extruded-sm)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    color: 'var(--text-main)',
+                    transition: 'all 0.2s ease'
+                  }}
+                  onMouseDown={(e) => e.currentTarget.style.boxShadow = 'var(--shadow-pressed)'}
+                  onMouseUp={(e) => e.currentTarget.style.boxShadow = 'var(--shadow-extruded-sm)'}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="19" y1="12" x2="5" y2="12"></line>
+                    <polyline points="12 19 5 12 12 5"></polyline>
+                  </svg>
+                </button>
+                <h1 className="title-serif" style={{ fontSize: '1.5rem', margin: 0 }}>Admin Dashboard</h1>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-light)', maxWidth: '100px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title="admin@infrabeacon.gov">
+                    admin@infrabeacon.gov
+                  </span>
+                  <button 
+                    onClick={() => {
+                      setIsAdminLoggedIn(false);
+                      setActiveTab('home');
+                    }}
+                    style={{
+                      border: 'none',
+                      outline: 'none',
+                      width: '38px',
+                      height: '38px',
+                      borderRadius: '50%',
+                      backgroundColor: 'var(--bg-color)',
+                      boxShadow: 'var(--shadow-extruded-sm)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      color: '#C62828',
+                      transition: 'all 0.2s ease'
+                    }}
+                    onMouseDown={(e) => e.currentTarget.style.boxShadow = 'var(--shadow-pressed)'}
+                    onMouseUp={(e) => e.currentTarget.style.boxShadow = 'var(--shadow-extruded-sm)'}
+                    title="Logout"
+                  >
+                    🚪
+                  </button>
+                </div>
               </header>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-                {issues.map(issue => (
-                  <NeumorphicCard key={issue.id} padding="16px">
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <div>
-                        <h4 style={{ fontWeight: '700', fontSize: '1rem' }}>{issue.title}</h4>
-                        <p style={{ fontSize: '0.82rem', color: 'var(--text-light)' }}>{issue.location} • By {issue.reporter}</p>
-                        <p style={{ fontSize: '0.82rem', fontWeight: '600', marginTop: '4px' }}>
-                          Current Status: <span style={{ color: issue.status === 'Resolved' ? '#2E7D32' : '#E65100' }}>{issue.status}</span>
-                        </p>
-                      </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <h2 className="title-serif" style={{ fontSize: '1.2rem', margin: 0 }}>Infrastructure Reports</h2>
+                <button 
+                  onClick={triggerRefresh}
+                  style={{
+                    border: 'none',
+                    outline: 'none',
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '50%',
+                    backgroundColor: 'var(--bg-color)',
+                    boxShadow: 'var(--shadow-extruded-sm)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    color: 'var(--accent-color)',
+                    transition: 'all 0.2s ease'
+                  }}
+                  onMouseDown={(e) => e.currentTarget.style.boxShadow = 'var(--shadow-pressed)'}
+                  onMouseUp={(e) => e.currentTarget.style.boxShadow = 'var(--shadow-extruded-sm)'}
+                  title="Refresh Data"
+                >
+                  <span style={{ 
+                    display: 'inline-block', 
+                    animation: isRefreshing ? 'spin 0.8s linear infinite' : 'none' 
+                  }}>
+                    🔄
+                  </span>
+                </button>
+              </div>
+
+              {(() => {
+                const filteredAdminIssues = issues
+                  .filter(issue => {
+                    let matchesStatus = true;
+                    if (adminFilterStatus !== 'All') {
+                      if (adminFilterStatus === 'new') {
+                        matchesStatus = issue.status === 'Submitted';
+                      } else if (adminFilterStatus === 'verified') {
+                        matchesStatus = issue.status === 'Approved' || issue.status === 'In Progress';
+                      } else if (adminFilterStatus === 'resolved') {
+                        matchesStatus = issue.status === 'Resolved';
+                      } else {
+                        matchesStatus = issue.status === adminFilterStatus;
+                      }
+                    }
+
+                    let matchesType = true;
+                    if (adminFilterType !== 'All') {
+                      const typeLower = adminFilterType.toLowerCase();
+                      const issueTitleLower = issue.title.toLowerCase();
                       
-                      <button 
-                        onClick={() => deleteIssue(issue.id)}
-                        style={{
-                          border: 'none',
-                          outline: 'none',
-                          backgroundColor: '#FFEBEE',
-                          color: '#C62828',
-                          width: '32px',
-                          height: '32px',
-                          borderRadius: '8px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        <TrashIcon size={14} color="#C62828" />
-                      </button>
+                      if (typeLower === 'pothole') {
+                        matchesType = issueTitleLower.includes('pothole');
+                      } else if (typeLower === 'broken_light') {
+                        matchesType = issueTitleLower.includes('light');
+                      } else if (typeLower === 'garbage') {
+                        matchesType = issueTitleLower.includes('garbage');
+                      } else if (typeLower === 'waterlogging') {
+                        matchesType = issueTitleLower.includes('drainage') || issueTitleLower.includes('water') || issueTitleLower.includes('flood');
+                      } else if (typeLower === 'other') {
+                        matchesType = !issueTitleLower.includes('pothole') && !issueTitleLower.includes('light') && !issueTitleLower.includes('garbage') && !issueTitleLower.includes('drainage');
+                      } else {
+                        matchesType = issue.title === adminFilterType;
+                      }
+                    }
+
+                    let matchesSeverity = true;
+                    if (adminFilterSeverity !== 'All') {
+                      matchesSeverity = (issue.severity || 'Medium').toLowerCase() === adminFilterSeverity.toLowerCase();
+                    }
+
+                    return matchesStatus && matchesType && matchesSeverity;
+                  })
+                  .sort((a, b) => {
+                    const severityOrder = { 'High': 3, 'Medium': 2, 'Low': 1 };
+                    const statusOrder = { 'Submitted': 1, 'Approved': 2, 'In Progress': 3, 'Resolved': 4 };
+
+                    if (adminSortOption === 'date-desc') {
+                      return b.id - a.id;
+                    }
+                    if (adminSortOption === 'date-asc') {
+                      return a.id - b.id;
+                    }
+                    if (adminSortOption === 'severity-desc') {
+                      return (severityOrder[b.severity || 'Medium'] || 2) - (severityOrder[a.severity || 'Medium'] || 2);
+                    }
+                    if (adminSortOption === 'severity-asc') {
+                      return (severityOrder[a.severity || 'Medium'] || 2) - (severityOrder[b.severity || 'Medium'] || 2);
+                    }
+                    if (adminSortOption === 'status-asc') {
+                      return (statusOrder[a.status] || 1) - (statusOrder[b.status] || 1);
+                    }
+                    if (adminSortOption === 'status-desc') {
+                      return (statusOrder[b.status] || 1) - (statusOrder[a.status] || 1);
+                    }
+                    return b.id - a.id;
+                  });
+
+                return (
+                  <div>
+                    {/* Stats Counters Row */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginBottom: '20px' }}>
+                      <NeumorphicCard padding="8px" style={{ alignItems: 'center', textAlign: 'center' }}>
+                        <span style={{ fontSize: '1.15rem', fontWeight: '700', color: 'var(--text-main)' }}>{issues.length}</span>
+                        <span style={{ fontSize: '0.55rem', fontWeight: '700', color: 'var(--text-light)', marginTop: '2px' }}>TOTAL</span>
+                      </NeumorphicCard>
+                      <NeumorphicCard padding="8px" style={{ alignItems: 'center', textAlign: 'center' }}>
+                        <span style={{ fontSize: '1.15rem', fontWeight: '700', color: '#C62828' }}>{issues.filter(i => i.status === 'Submitted').length}</span>
+                        <span style={{ fontSize: '0.55rem', fontWeight: '700', color: '#C62828', marginTop: '2px' }}>NEW</span>
+                      </NeumorphicCard>
+                      <NeumorphicCard padding="8px" style={{ alignItems: 'center', textAlign: 'center' }}>
+                        <span style={{ fontSize: '1.15rem', fontWeight: '700', color: '#1565C0' }}>{issues.filter(i => i.status === 'Approved' || i.status === 'In Progress').length}</span>
+                        <span style={{ fontSize: '0.55rem', fontWeight: '700', color: '#1565C0', marginTop: '2px' }}>VERIFIED</span>
+                      </NeumorphicCard>
+                      <NeumorphicCard padding="8px" style={{ alignItems: 'center', textAlign: 'center' }}>
+                        <span style={{ fontSize: '1.15rem', fontWeight: '700', color: '#2E7D32' }}>{issues.filter(i => i.status === 'Resolved').length}</span>
+                        <span style={{ fontSize: '0.55rem', fontWeight: '700', color: '#2E7D32', marginTop: '2px' }}>RESOLVED</span>
+                      </NeumorphicCard>
                     </div>
 
-                    {/* Status change actions */}
-                    <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
-                      <button
-                        onClick={() => updateIssueStatus(issue.id, 'Submitted')}
-                        style={{
-                          flex: 1,
-                          padding: '6px',
-                          fontSize: '0.75rem',
-                          fontWeight: '600',
-                          border: 'none',
-                          borderRadius: '8px',
-                          backgroundColor: 'var(--bg-color)',
-                          boxShadow: issue.status === 'Submitted' ? 'var(--shadow-pressed)' : 'var(--shadow-extruded-sm)',
-                          color: issue.status === 'Submitted' ? 'var(--accent-color)' : 'var(--text-light)',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        Submitted
-                      </button>
-                      <button
-                        onClick={() => updateIssueStatus(issue.id, 'In Progress')}
-                        style={{
-                          flex: 1,
-                          padding: '6px',
-                          fontSize: '0.75rem',
-                          fontWeight: '600',
-                          border: 'none',
-                          borderRadius: '8px',
-                          backgroundColor: 'var(--bg-color)',
-                          boxShadow: issue.status === 'In Progress' ? 'var(--shadow-pressed)' : 'var(--shadow-extruded-sm)',
-                          color: issue.status === 'In Progress' ? 'var(--accent-color)' : 'var(--text-light)',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        In Progress
-                      </button>
-                      <button
-                        onClick={() => updateIssueStatus(issue.id, 'Resolved')}
-                        style={{
-                          flex: 1,
-                          padding: '6px',
-                          fontSize: '0.75rem',
-                          fontWeight: '600',
-                          border: 'none',
-                          borderRadius: '8px',
-                          backgroundColor: 'var(--bg-color)',
-                          boxShadow: issue.status === 'Resolved' ? 'var(--shadow-pressed)' : 'var(--shadow-extruded-sm)',
-                          color: issue.status === 'Resolved' ? 'var(--accent-color)' : 'var(--text-light)',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        Resolved
-                      </button>
+                    {/* View Switcher and Filters Panel */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px' }}>
+                      {/* List / Map View Toggle */}
+                      <div style={{
+                        display: 'flex',
+                        backgroundColor: 'var(--bg-color)',
+                        borderRadius: '16px',
+                        padding: '4px',
+                        boxShadow: 'var(--shadow-pressed)'
+                      }}>
+                        <button
+                          type="button"
+                          onClick={() => setAdminSubView('list')}
+                          style={{
+                            flex: 1,
+                            padding: '8px',
+                            borderRadius: '12px',
+                            border: 'none',
+                            outline: 'none',
+                            backgroundColor: adminSubView === 'list' ? 'var(--bg-color)' : 'transparent',
+                            boxShadow: adminSubView === 'list' ? 'var(--shadow-extruded-sm)' : 'none',
+                            color: 'var(--text-main)',
+                            fontWeight: '700',
+                            fontSize: '0.8rem',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease'
+                          }}
+                        >
+                          📋 List View
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAdminSubView('map')}
+                          style={{
+                            flex: 1,
+                            padding: '8px',
+                            borderRadius: '12px',
+                            border: 'none',
+                            outline: 'none',
+                            backgroundColor: adminSubView === 'map' ? 'var(--bg-color)' : 'transparent',
+                            boxShadow: adminSubView === 'map' ? 'var(--shadow-extruded-sm)' : 'none',
+                            color: 'var(--text-main)',
+                            fontWeight: '700',
+                            fontSize: '0.8rem',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease'
+                          }}
+                        >
+                          🗺️ Map View
+                        </button>
+                      </div>
+
+                      {/* Filter Selectors (matching the dropdowns of Flask app admin dashboard) */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <label style={{ fontSize: '0.65rem', fontWeight: '600', color: 'var(--text-light)' }}>STATUS</label>
+                          <select
+                            value={adminFilterStatus}
+                            onChange={(e) => setAdminFilterStatus(e.target.value)}
+                            style={{
+                              padding: '8px 12px',
+                              borderRadius: '10px',
+                              border: 'none',
+                              outline: 'none',
+                              backgroundColor: 'var(--bg-color)',
+                              boxShadow: 'var(--shadow-extruded-sm)',
+                              fontSize: '0.75rem',
+                              fontFamily: 'Outfit',
+                              color: 'var(--text-main)',
+                              fontWeight: '500'
+                            }}
+                          >
+                            <option value="All">All Statuses</option>
+                            <option value="new">🔴 New</option>
+                            <option value="verified">🟡 Verified</option>
+                            <option value="resolved">🟢 Resolved</option>
+                          </select>
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <label style={{ fontSize: '0.65rem', fontWeight: '600', color: 'var(--text-light)' }}>SEVERITY</label>
+                          <select
+                            value={adminFilterSeverity}
+                            onChange={(e) => setAdminFilterSeverity(e.target.value)}
+                            style={{
+                              padding: '8px 12px',
+                              borderRadius: '10px',
+                              border: 'none',
+                              outline: 'none',
+                              backgroundColor: 'var(--bg-color)',
+                              boxShadow: 'var(--shadow-extruded-sm)',
+                              fontSize: '0.75rem',
+                              fontFamily: 'Outfit',
+                              color: 'var(--text-main)',
+                              fontWeight: '500'
+                            }}
+                          >
+                            <option value="All">All Severities</option>
+                            <option value="high">🔴 High</option>
+                            <option value="medium">🟡 Medium</option>
+                            <option value="low">🟢 Low</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <label style={{ fontSize: '0.65rem', fontWeight: '600', color: 'var(--text-light)' }}>ISSUE TYPE</label>
+                          <select
+                            value={adminFilterType}
+                            onChange={(e) => setAdminFilterType(e.target.value)}
+                            style={{
+                              padding: '8px 12px',
+                              borderRadius: '10px',
+                              border: 'none',
+                              outline: 'none',
+                              backgroundColor: 'var(--bg-color)',
+                              boxShadow: 'var(--shadow-extruded-sm)',
+                              fontSize: '0.75rem',
+                              fontFamily: 'Outfit',
+                              color: 'var(--text-main)',
+                              fontWeight: '500'
+                            }}
+                          >
+                            <option value="All">All Types</option>
+                            <option value="pothole">🕳️ Pothole</option>
+                            <option value="broken_light">💡 Broken Light</option>
+                            <option value="garbage">🗑️ Garbage</option>
+                            <option value="waterlogging">🌊 Waterlogging</option>
+                            <option value="other">⚠️ Other</option>
+                          </select>
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <label style={{ fontSize: '0.65rem', fontWeight: '600', color: 'var(--text-light)' }}>SORT BY</label>
+                          <select
+                            value={adminSortOption}
+                            onChange={(e) => setAdminSortOption(e.target.value)}
+                            style={{
+                              padding: '8px 12px',
+                              borderRadius: '10px',
+                              border: 'none',
+                              outline: 'none',
+                              backgroundColor: 'var(--bg-color)',
+                              boxShadow: 'var(--shadow-extruded-sm)',
+                              fontSize: '0.75rem',
+                              fontFamily: 'Outfit',
+                              color: 'var(--text-main)',
+                              fontWeight: '500'
+                            }}
+                          >
+                            <option value="date-desc">📅 Newest First</option>
+                            <option value="date-asc">📅 Oldest First</option>
+                            <option value="severity-desc">⚠️ Severity (High→Low)</option>
+                            <option value="severity-asc">⚠️ Severity (Low→High)</option>
+                            <option value="status-asc">📊 Status (New→Resolved)</option>
+                            <option value="status-desc">📊 Status (Resolved→New)</option>
+                          </select>
+                        </div>
+                      </div>
                     </div>
-                  </NeumorphicCard>
-                ))}
-              </div>
+
+                    {/* RENDER LIST VIEW */}
+                    {adminSubView === 'list' && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+                        {/* Mocking Flask app table header visually */}
+                        <div style={{
+                          display: 'grid',
+                          gridTemplateColumns: '60px 1fr',
+                          padding: '0 8px',
+                          marginBottom: '-8px',
+                          fontSize: '0.68rem',
+                          fontWeight: '700',
+                          color: 'var(--text-light)',
+                          letterSpacing: '0.5px'
+                        }}>
+                          <span>IMAGE</span>
+                          <span>REPORT DETAILS & CONTROLS</span>
+                        </div>
+
+                        {filteredAdminIssues.length > 0 ? (
+                          filteredAdminIssues.map(issue => (
+                            <NeumorphicCard key={issue.id} padding="16px">
+                              <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
+                                {/* Image column matching dynamic modal action */}
+                                <div 
+                                  onClick={() => setActiveImageModal(issue.photoType)}
+                                  style={{
+                                    width: '60px',
+                                    height: '60px',
+                                    borderRadius: '12px',
+                                    overflow: 'hidden',
+                                    boxShadow: 'var(--shadow-pressed)',
+                                    border: '1.5px solid var(--shadow-dark)',
+                                    cursor: 'pointer',
+                                    flexShrink: 0,
+                                    backgroundColor: '#FFFFFF',
+                                    transition: 'transform 0.15s ease'
+                                  }}
+                                  title="Click to view image fullscreen"
+                                >
+                                  {renderPhotoThumbnail(issue.photoType)}
+                                </div>
+
+                                {/* Details column */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: 1 }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                    <h4 style={{ fontWeight: '700', fontSize: '0.95rem', margin: 0 }}>
+                                      {getTypeLabel(issue.title)}
+                                    </h4>
+                                    
+                                    <button 
+                                      onClick={() => deleteIssue(issue.id)}
+                                      style={{
+                                        border: 'none',
+                                        outline: 'none',
+                                        backgroundColor: '#FFEBEE',
+                                        color: '#C62828',
+                                        width: '28px',
+                                        height: '28px',
+                                        borderRadius: '8px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        cursor: 'pointer',
+                                        transition: 'transform 0.1s ease'
+                                      }}
+                                      title="Delete Report"
+                                    >
+                                      <TrashIcon size={12} color="#C62828" />
+                                    </button>
+                                  </div>
+
+                                  <p style={{ fontSize: '0.78rem', color: 'var(--text-light)', margin: '2px 0 4px 0' }}>
+                                    📍 {issue.location} • By {issue.reporter} • {issue.time}
+                                  </p>
+
+                                  {/* Badges list row */}
+                                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' }}>
+                                    <span style={{ 
+                                      fontSize: '0.68rem', 
+                                      fontWeight: '700', 
+                                      padding: '3px 10px', 
+                                      borderRadius: '12px',
+                                      ...getBadgeStyle('issue_type', issue.title)
+                                    }}>
+                                      {getTypeLabel(issue.title)}
+                                    </span>
+                                    <span style={{ 
+                                      fontSize: '0.68rem', 
+                                      fontWeight: '700', 
+                                      padding: '3px 10px', 
+                                      borderRadius: '12px',
+                                      ...getBadgeStyle('severity', issue.severity)
+                                    }}>
+                                      {issue.severity?.toUpperCase() || 'MEDIUM'}
+                                    </span>
+                                    <span style={{ 
+                                      fontSize: '0.68rem', 
+                                      fontWeight: '700', 
+                                      padding: '3px 10px', 
+                                      borderRadius: '12px',
+                                      ...getBadgeStyle('status', issue.status)
+                                    }}>
+                                      {getStatusLabel(issue.status)}
+                                    </span>
+                                  </div>
+
+                                  {/* Action row (mimicking verify, resolve, delete from Flask templates) */}
+                                  <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
+                                    {issue.status === 'Submitted' && (
+                                      <button
+                                        onClick={() => updateIssueStatus(issue.id, 'Approved')}
+                                        style={{
+                                          flex: 1,
+                                          padding: '8px 12px',
+                                          fontSize: '0.75rem',
+                                          fontWeight: '700',
+                                          border: 'none',
+                                          borderRadius: '8px',
+                                          backgroundColor: '#E8F5E9',
+                                          color: '#2E7D32',
+                                          boxShadow: 'var(--shadow-extruded-sm)',
+                                          cursor: 'pointer',
+                                          transition: 'all 0.1s ease'
+                                        }}
+                                      >
+                                        ✓ Verify / Approve
+                                      </button>
+                                    )}
+
+                                    {issue.status === 'Approved' && (
+                                      <button
+                                        onClick={() => setActiveTicketFormIssueId(issue.id)}
+                                        style={{
+                                          flex: 1,
+                                          padding: '8px 12px',
+                                          fontSize: '0.75rem',
+                                          fontWeight: '700',
+                                          border: 'none',
+                                          borderRadius: '8px',
+                                          backgroundColor: '#E3F2FD',
+                                          color: '#1565C0',
+                                          boxShadow: 'var(--shadow-extruded-sm)',
+                                          cursor: 'pointer',
+                                          transition: 'all 0.1s ease'
+                                        }}
+                                      >
+                                        🎫 Create Ticket
+                                      </button>
+                                    )}
+
+                                    {issue.status !== 'Resolved' && (
+                                      <button
+                                        onClick={() => setActiveResolveFormIssueId(issue.id)}
+                                        style={{
+                                          flex: 1,
+                                          padding: '8px 12px',
+                                          fontSize: '0.75rem',
+                                          fontWeight: '700',
+                                          border: 'none',
+                                          borderRadius: '8px',
+                                          backgroundColor: '#FFF8E1',
+                                          color: '#F57F17',
+                                          boxShadow: 'var(--shadow-extruded-sm)',
+                                          cursor: 'pointer',
+                                          transition: 'all 0.1s ease'
+                                        }}
+                                      >
+                                        ✅ Resolve
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Inline Ticket creation form */}
+                              {activeTicketFormIssueId === issue.id && (
+                                <form onSubmit={(e) => handleCreateTicket(e, issue.id)} style={{
+                                  marginTop: '12px',
+                                  padding: '12px',
+                                  borderRadius: '12px',
+                                  backgroundColor: 'var(--bg-color)',
+                                  boxShadow: 'var(--shadow-pressed)',
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  gap: '10px',
+                                  animation: 'fadeIn 0.2s ease'
+                                }}>
+                                  <h5 style={{ fontWeight: '700', fontSize: '0.85rem', color: 'var(--text-main)' }}>Create Work Ticket</h5>
+                                  
+                                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                      <label style={{ fontSize: '0.7rem', fontWeight: '600', color: 'var(--text-light)' }}>DEPARTMENT</label>
+                                      <select
+                                        name="department"
+                                        required
+                                        style={{
+                                          padding: '6px 10px',
+                                          borderRadius: '8px',
+                                          border: 'none',
+                                          outline: 'none',
+                                          backgroundColor: 'var(--bg-color)',
+                                          boxShadow: 'var(--shadow-extruded-sm)',
+                                          fontSize: '0.8rem',
+                                          fontFamily: 'Outfit'
+                                        }}
+                                      >
+                                        <option>Public Works</option>
+                                        <option>Sanitation & Waste</option>
+                                        <option>Roads & Traffic</option>
+                                        <option>Water & Sewage</option>
+                                        <option>Forestry & Parks</option>
+                                      </select>
+                                    </div>
+
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                      <label style={{ fontSize: '0.7rem', fontWeight: '600', color: 'var(--text-light)' }}>PRIORITY</label>
+                                      <select
+                                        name="priority"
+                                        required
+                                        style={{
+                                          padding: '6px 10px',
+                                          borderRadius: '8px',
+                                          border: 'none',
+                                          outline: 'none',
+                                          backgroundColor: 'var(--bg-color)',
+                                          boxShadow: 'var(--shadow-extruded-sm)',
+                                          fontSize: '0.8rem',
+                                          fontFamily: 'Outfit'
+                                        }}
+                                      >
+                                        <option>Low</option>
+                                        <option>Medium</option>
+                                        <option>High</option>
+                                        <option>Critical</option>
+                                      </select>
+                                    </div>
+                                  </div>
+
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                    <label style={{ fontSize: '0.7rem', fontWeight: '600', color: 'var(--text-light)' }}>SCHEDULED DATE</label>
+                                    <input
+                                      type="date"
+                                      name="scheduledDate"
+                                      required
+                                      defaultValue={new Date(Date.now() + 3*24*60*60*1000).toISOString().split('T')[0]}
+                                      style={{
+                                        padding: '6px 10px',
+                                        borderRadius: '8px',
+                                        border: 'none',
+                                        outline: 'none',
+                                        backgroundColor: 'var(--bg-color)',
+                                        boxShadow: 'var(--shadow-extruded-sm)',
+                                        fontSize: '0.8rem',
+                                        fontFamily: 'Outfit'
+                                      }}
+                                    />
+                                  </div>
+
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                    <label style={{ fontSize: '0.7rem', fontWeight: '600', color: 'var(--text-light)' }}>WORK NOTES</label>
+                                    <textarea
+                                      name="notes"
+                                      placeholder="Add instructions for repair crew..."
+                                      rows={2}
+                                      style={{
+                                        padding: '6px 10px',
+                                        borderRadius: '8px',
+                                        border: 'none',
+                                        outline: 'none',
+                                        backgroundColor: 'var(--bg-color)',
+                                        boxShadow: 'var(--shadow-extruded-sm)',
+                                        fontSize: '0.8rem',
+                                        fontFamily: 'Outfit',
+                                        resize: 'none'
+                                      }}
+                                    />
+                                  </div>
+
+                                  <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                                    <button type="submit" style={{
+                                      flex: 1,
+                                      padding: '8px',
+                                      borderRadius: '8px',
+                                      border: 'none',
+                                      backgroundColor: 'var(--accent-color)',
+                                      color: '#FFF',
+                                      fontSize: '0.8rem',
+                                      fontWeight: '600',
+                                      cursor: 'pointer'
+                                    }}>
+                                      Create Ticket
+                                    </button>
+                                    <button type="button" onClick={() => setActiveTicketFormIssueId(null)} style={{
+                                      flex: 1,
+                                      padding: '8px',
+                                      borderRadius: '8px',
+                                      border: 'none',
+                                      backgroundColor: 'var(--bg-color)',
+                                      boxShadow: 'var(--shadow-extruded-sm)',
+                                      color: 'var(--text-light)',
+                                      fontSize: '0.8rem',
+                                      fontWeight: '600',
+                                      cursor: 'pointer'
+                                    }}>
+                                      Cancel
+                                    </button>
+                                  </div>
+                                </form>
+                              )}
+
+                              {/* Inline Resolve Form */}
+                              {activeResolveFormIssueId === issue.id && (
+                                <form onSubmit={(e) => handleResolveSubmit(e, issue.id)} style={{
+                                  marginTop: '12px',
+                                  padding: '12px',
+                                  borderRadius: '12px',
+                                  backgroundColor: 'var(--bg-color)',
+                                  boxShadow: 'var(--shadow-pressed)',
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  gap: '10px',
+                                  animation: 'fadeIn 0.2s ease'
+                                }}>
+                                  <h5 style={{ fontWeight: '700', fontSize: '0.85rem', color: 'var(--text-main)' }}>Resolve Issue</h5>
+                                  
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                    <label style={{ fontSize: '0.7rem', fontWeight: '600', color: 'var(--text-light)' }}>RESOLUTION NOTES</label>
+                                    <textarea
+                                      name="resolutionNotes"
+                                      placeholder="Enter details of how the issue was fixed (optional)..."
+                                      rows={2}
+                                      style={{
+                                        padding: '6px 10px',
+                                        borderRadius: '8px',
+                                        border: 'none',
+                                        outline: 'none',
+                                        backgroundColor: 'var(--bg-color)',
+                                        boxShadow: 'var(--shadow-extruded-sm)',
+                                        fontSize: '0.8rem',
+                                        fontFamily: 'Outfit',
+                                        resize: 'none'
+                                      }}
+                                    />
+                                  </div>
+
+                                  <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                                    <button type="submit" style={{
+                                      flex: 1,
+                                      padding: '8px',
+                                      borderRadius: '8px',
+                                      border: 'none',
+                                      backgroundColor: 'var(--accent-color)',
+                                      color: '#FFF',
+                                      fontSize: '0.8rem',
+                                      fontWeight: '600',
+                                      cursor: 'pointer'
+                                    }}>
+                                      Confirm Resolution
+                                    </button>
+                                    <button type="button" onClick={() => setActiveResolveFormIssueId(null)} style={{
+                                      flex: 1,
+                                      padding: '8px',
+                                      borderRadius: '8px',
+                                      border: 'none',
+                                      backgroundColor: 'var(--bg-color)',
+                                      boxShadow: 'var(--shadow-extruded-sm)',
+                                      color: 'var(--text-light)',
+                                      fontSize: '0.8rem',
+                                      fontWeight: '600',
+                                      cursor: 'pointer'
+                                    }}>
+                                      Cancel
+                                    </button>
+                                  </div>
+                                </form>
+                              )}
+
+                              {/* Ticket details display */}
+                              {issue.ticket && (
+                                <div style={{
+                                  marginTop: '12px',
+                                  padding: '12px 14px',
+                                  borderRadius: '16px',
+                                  backgroundColor: 'var(--accent-light)',
+                                  border: '1px solid rgba(91,133,109,0.3)',
+                                  boxShadow: 'var(--shadow-pressed)',
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  gap: '6px',
+                                  animation: 'fadeIn 0.3s ease'
+                                }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <span style={{ fontSize: '0.78rem', fontWeight: '700', color: 'var(--accent-color)', letterSpacing: '0.5px' }}>
+                                      🎫 TICKET: {issue.ticket.ticketId}
+                                    </span>
+                                    <span style={{
+                                      fontSize: '0.7rem',
+                                      fontWeight: '700',
+                                      padding: '2px 6px',
+                                      borderRadius: '6px',
+                                      backgroundColor: 
+                                        issue.ticket.priority === 'Critical' || issue.ticket.priority === 'High' ? '#FFEBEE' : 
+                                        issue.ticket.priority === 'Medium' ? '#FFF3E0' : '#E8F5E9',
+                                      color: 
+                                        issue.ticket.priority === 'Critical' || issue.ticket.priority === 'High' ? '#C62828' : 
+                                        issue.ticket.priority === 'Medium' ? '#E65100' : '#2E7D32'
+                                    }}>
+                                      {issue.ticket.priority} Priority
+                                    </span>
+                                  </div>
+                                  
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', fontSize: '0.8rem', color: 'var(--text-main)' }}>
+                                    <div><strong>Assigned Dept:</strong> {issue.ticket.department}</div>
+                                    <div><strong>Schedule Date:</strong> {issue.ticket.scheduledDate}</div>
+                                    {issue.ticket.notes && (
+                                      <div style={{ 
+                                        fontSize: '0.75rem', 
+                                        color: 'var(--text-light)', 
+                                        fontStyle: 'italic',
+                                        marginTop: '2px',
+                                        borderLeft: '2px solid var(--accent-color)',
+                                        paddingLeft: '6px'
+                                      }}>
+                                        "{issue.ticket.notes}"
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Resolution Notes display (if exists) */}
+                              {issue.resolutionNotes && (
+                                <div style={{
+                                  marginTop: '12px',
+                                  padding: '12px 14px',
+                                  borderRadius: '16px',
+                                  backgroundColor: '#E8F5E9',
+                                  border: '1px solid rgba(46,125,50,0.3)',
+                                  boxShadow: 'var(--shadow-pressed)',
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  gap: '4px',
+                                  animation: 'fadeIn 0.3s ease'
+                                }}>
+                                  <span style={{ fontSize: '0.78rem', fontWeight: '700', color: '#2E7D32' }}>
+                                    ✅ RESOLUTION NOTES:
+                                  </span>
+                                  <p style={{ fontSize: '0.8rem', color: 'var(--text-main)', margin: 0, fontStyle: 'italic' }}>
+                                    "{issue.resolutionNotes}"
+                                  </p>
+                                </div>
+                              )}
+                            </NeumorphicCard>
+                          ))
+                        ) : (
+                          <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-light)', fontSize: '0.9rem' }}>
+                            No reports match your filters.
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* RENDER MAP VIEW (mocking Google Maps features from Flask app admin panel) */}
+                    {adminSubView === 'map' && (
+                      <div>
+                        <div style={{
+                          width: '100%',
+                          height: '380px',
+                          borderRadius: '28px',
+                          overflow: 'hidden',
+                          boxShadow: 'var(--shadow-pressed)',
+                          position: 'relative',
+                          backgroundColor: '#E5EFEA',
+                          border: '2px solid var(--shadow-dark)'
+                        }}>
+                          {/* SVG Map Grid Layout */}
+                          <svg width="100%" height="100%" viewBox="0 0 400 360">
+                            <defs>
+                              <filter id="heatmap-blur" x="-20%" y="-20%" width="140%" height="140%">
+                                <feGaussianBlur stdDeviation="15" />
+                              </filter>
+                            </defs>
+                            <rect width="100%" height="100%" fill="#E3ECE6" />
+                            <path d="M 0 0 Q 150 120 220 0 Z" fill="#D2E3D8" />
+                            <path d="M 280 360 Q 340 280 400 300 L 400 360 Z" fill="#D2E3D8" />
+
+                            <path d="M -10 100 L 410 100" stroke="#FFFFFF" strokeWidth="10" fill="none" />
+                            <path d="M -10 260 L 410 260" stroke="#FFFFFF" strokeWidth="10" fill="none" />
+                            <path d="M 120 -10 L 120 370" stroke="#FFFFFF" strokeWidth="10" fill="none" />
+                            <path d="M 300 -10 L 300 370" stroke="#FFFFFF" strokeWidth="8" fill="none" />
+
+                            {/* User location dot */}
+                            {showUserLocation && (
+                              <g>
+                                <circle cx="200" cy="180" r="14" fill="#4285F4" fillOpacity="0.3">
+                                  <animate attributeName="r" values="8;16;8" dur="1.5s" repeatCount="indefinite" />
+                                </circle>
+                                <circle cx="200" cy="180" r="7" fill="#4285F4" stroke="#FFFFFF" strokeWidth="2.5" />
+                              </g>
+                            )}
+
+                            {/* Heatmap Layer */}
+                            {showHeatmap && filteredAdminIssues.map(issue => {
+                              const x = (issue.lat / 100) * 320 + 40;
+                              const y = (issue.lng / 100) * 280 + 40;
+                              const statusColors = {
+                                'Submitted': '#E53935',
+                                'Approved': '#1E88E5',
+                                'In Progress': '#F57C00',
+                                'Resolved': '#2E7D32'
+                              };
+                              const pinColor = statusColors[issue.status] || '#E53935';
+                              return (
+                                <circle
+                                  key={`heatmap-${issue.id}`}
+                                  cx={x}
+                                  cy={y}
+                                  r="35"
+                                  fill={pinColor}
+                                  fillOpacity="0.7"
+                                  filter="url(#heatmap-blur)"
+                                />
+                              );
+                            })}
+
+                            {/* Standard Interactive Pins */}
+                            {!showHeatmap && filteredAdminIssues.map(issue => {
+                              const x = (issue.lat / 100) * 320 + 40;
+                              const y = (issue.lng / 100) * 280 + 40;
+                              const statusColors = {
+                                'Submitted': '#E53935',
+                                'Approved': '#1E88E5',
+                                'In Progress': '#F57C00',
+                                'Resolved': '#2E7D32'
+                              };
+                              const pinColor = statusColors[issue.status] || '#E53935';
+
+                              return (
+                                <g 
+                                  key={`pin-${issue.id}`} 
+                                  style={{ cursor: 'pointer' }}
+                                  onClick={() => setActiveMapPopup(issue)}
+                                >
+                                  <circle cx={x} cy={y} r="12" fill={pinColor} fillOpacity="0.25">
+                                    <animate attributeName="r" values="10;14;10" dur="2s" repeatCount="indefinite" />
+                                  </circle>
+                                  <path d={`M${x} ${y - 10} C${x - 5} ${y - 10} ${x - 8} ${y - 7} ${x - 8} ${y - 2} C${x - 8} 3 ${x} 12 ${x} 12 C${x} 12 ${x + 8} 3 ${x + 8} ${y - 2} C${x + 8} ${y - 7} ${x + 5} ${y - 10} ${x} ${y - 10} Z`} fill={pinColor} />
+                                  <circle cx={x} cy={y - 2.5} r="2.5" fill="#FFFFFF" />
+                                  
+                                  <rect x={x - 45} y={y - 32} width="90" height="18" rx="5" fill="var(--text-main)" opacity="0.8" />
+                                  <text x={x} y={y - 20} fill="#FFFFFF" fontSize="8" fontWeight="600" textAnchor="middle">
+                                    {issue.title}
+                                  </text>
+                                </g>
+                              );
+                            })}
+                          </svg>
+
+                          {/* Map Stats Overlay */}
+                          <div style={{
+                            position: 'absolute',
+                            top: '12px',
+                            left: '12px',
+                            backgroundColor: 'rgba(236, 243, 240, 0.95)',
+                            padding: '6px 12px',
+                            borderRadius: '12px',
+                            boxShadow: 'var(--shadow-extruded-sm)',
+                            fontSize: '0.72rem',
+                            fontWeight: '700',
+                            color: 'var(--text-main)',
+                            zIndex: 10,
+                            pointerEvents: 'none'
+                          }}>
+                            <span>Total: <strong style={{ color: 'var(--accent-color)' }}>{issues.length}</strong></span>
+                            <span style={{ marginLeft: '12px' }}>Showing: <strong style={{ color: 'var(--accent-color)' }}>{filteredAdminIssues.length}</strong></span>
+                          </div>
+
+                          {/* Map Controls */}
+                          <div style={{
+                            position: 'absolute',
+                            top: '12px',
+                            right: '12px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '8px',
+                            zIndex: 10
+                          }}>
+                            <button 
+                              onClick={() => setShowHeatmap(!showHeatmap)}
+                              style={{
+                                width: '36px',
+                                height: '36px',
+                                borderRadius: '8px',
+                                border: 'none',
+                                backgroundColor: showHeatmap ? 'var(--accent-color)' : 'rgba(236, 243, 240, 0.9)',
+                                color: showHeatmap ? '#FFF' : 'var(--text-main)',
+                                boxShadow: 'var(--shadow-extruded-sm)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                cursor: 'pointer',
+                                fontSize: '1rem',
+                                transition: 'all 0.2s ease'
+                              }}
+                              title="Toggle Heatmap"
+                            >
+                              🔥
+                            </button>
+                            <button 
+                              onClick={() => {
+                                setShowUserLocation(!showUserLocation);
+                              }}
+                              style={{
+                                width: '36px',
+                                height: '36px',
+                                borderRadius: '8px',
+                                border: 'none',
+                                backgroundColor: showUserLocation ? 'var(--accent-color)' : 'rgba(236, 243, 240, 0.9)',
+                                color: showUserLocation ? '#FFF' : 'var(--text-main)',
+                                boxShadow: 'var(--shadow-extruded-sm)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                cursor: 'pointer',
+                                fontSize: '1rem',
+                                transition: 'all 0.2s ease'
+                              }}
+                              title="Locate Me"
+                            >
+                              📍
+                            </button>
+                            <button 
+                              onClick={triggerRefresh}
+                              style={{
+                                width: '36px',
+                                height: '36px',
+                                borderRadius: '8px',
+                                border: 'none',
+                                backgroundColor: 'rgba(236, 243, 240, 0.9)',
+                                color: 'var(--text-main)',
+                                boxShadow: 'var(--shadow-extruded-sm)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                cursor: 'pointer',
+                                fontSize: '1rem',
+                                transition: 'all 0.2s ease'
+                              }}
+                              title="Refresh Map"
+                            >
+                              <span style={{ display: 'inline-block', animation: isRefreshing ? 'spin 0.8s linear infinite' : 'none' }}>
+                                🔄
+                              </span>
+                            </button>
+                          </div>
+
+                          {/* Map Legend */}
+                          <div style={{
+                            position: 'absolute',
+                            bottom: '12px',
+                            left: '12px',
+                            backgroundColor: 'rgba(236, 243, 240, 0.95)',
+                            padding: '8px 12px',
+                            borderRadius: '12px',
+                            boxShadow: 'var(--shadow-extruded-sm)',
+                            fontSize: '0.65rem',
+                            fontWeight: '600',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '4px',
+                            zIndex: 10,
+                            pointerEvents: 'none'
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#E53935' }} />
+                              <span>New</span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#1E88E5' }} />
+                              <span>Verified</span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#F57C00' }} />
+                              <span>In Progress</span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#2E7D32' }} />
+                              <span>Resolved</span>
+                            </div>
+                          </div>
+
+                          {/* InfoWindow Popup on map */}
+                          {activeMapPopup && (
+                            <div style={{
+                              position: 'absolute',
+                              bottom: '70px',
+                              left: '12px',
+                              right: '12px',
+                              backgroundColor: 'rgba(236, 243, 240, 0.98)',
+                              padding: '14px',
+                              borderRadius: '20px',
+                              boxShadow: 'var(--shadow-extruded)',
+                              border: '1.5px solid var(--shadow-dark)',
+                              zIndex: 25,
+                              animation: 'fadeIn 0.25s ease',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '10px'
+                            }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <h4 style={{ fontWeight: '700', fontSize: '0.95rem', margin: 0 }}>
+                                  {getTypeLabel(activeMapPopup.title)}
+                                </h4>
+                                <button 
+                                  onClick={() => setActiveMapPopup(null)}
+                                  style={{
+                                    border: 'none',
+                                    background: 'none',
+                                    color: 'var(--text-light)',
+                                    fontSize: '1.2rem',
+                                    cursor: 'pointer',
+                                    fontWeight: 'bold',
+                                    padding: '2px 6px'
+                                  }}
+                                >
+                                  &times;
+                                </button>
+                              </div>
+
+                              <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+                                <div 
+                                  onClick={() => {
+                                    setActiveImageModal(activeMapPopup.photoType);
+                                  }}
+                                  style={{
+                                    width: '64px',
+                                    height: '64px',
+                                    borderRadius: '12px',
+                                    overflow: 'hidden',
+                                    boxShadow: 'var(--shadow-pressed)',
+                                    border: '1px solid var(--shadow-dark)',
+                                    flexShrink: 0,
+                                    cursor: 'pointer',
+                                    backgroundColor: '#FFFFFF'
+                                  }}
+                                >
+                                  {renderPhotoThumbnail(activeMapPopup.photoType)}
+                                </div>
+
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
+                                  <p style={{ fontSize: '0.8rem', color: 'var(--text-main)', margin: 0, fontWeight: '500' }}>
+                                    📍 {activeMapPopup.location}
+                                  </p>
+                                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '2px' }}>
+                                    <span style={{ 
+                                      fontSize: '0.68rem', 
+                                      fontWeight: '700', 
+                                      padding: '2px 8px', 
+                                      borderRadius: '10px',
+                                      ...getBadgeStyle('severity', activeMapPopup.severity)
+                                    }}>
+                                      {activeMapPopup.severity.toUpperCase()}
+                                    </span>
+                                    <span style={{ 
+                                      fontSize: '0.68rem', 
+                                      fontWeight: '700', 
+                                      padding: '2px 8px', 
+                                      borderRadius: '10px',
+                                      ...getBadgeStyle('status', activeMapPopup.status)
+                                    }}>
+                                      {activeMapPopup.status}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div style={{ display: 'flex', gap: '8px', marginTop: '2px' }}>
+                                {activeMapPopup.status === 'Submitted' && (
+                                  <button
+                                    onClick={() => {
+                                      updateIssueStatus(activeMapPopup.id, 'Approved');
+                                      setActiveMapPopup(prev => ({ ...prev, status: 'Approved' }));
+                                    }}
+                                    style={{
+                                      flex: 1,
+                                      padding: '8px',
+                                      borderRadius: '8px',
+                                      border: 'none',
+                                      backgroundColor: '#E8F5E9',
+                                      color: '#2E7D32',
+                                      fontSize: '0.75rem',
+                                      fontWeight: '700',
+                                      cursor: 'pointer'
+                                    }}
+                                  >
+                                    ✓ Verify
+                                  </button>
+                                )}
+                                {activeMapPopup.status === 'Approved' && (
+                                  <button
+                                    onClick={() => {
+                                      setActiveTicketFormIssueId(activeMapPopup.id);
+                                      setAdminSubView('list');
+                                      setActiveMapPopup(null);
+                                    }}
+                                    style={{
+                                      flex: 1,
+                                      padding: '8px',
+                                      borderRadius: '8px',
+                                      border: 'none',
+                                      backgroundColor: '#E3F2FD',
+                                      color: '#1565C0',
+                                      fontSize: '0.75rem',
+                                      fontWeight: '700',
+                                      cursor: 'pointer'
+                                    }}
+                                  >
+                                    🎫 Create Ticket
+                                  </button>
+                                )}
+                                {activeMapPopup.status !== 'Resolved' && (
+                                  <button
+                                    onClick={() => {
+                                      setActiveResolveFormIssueId(activeMapPopup.id);
+                                      setAdminSubView('list');
+                                      setActiveMapPopup(null);
+                                    }}
+                                    style={{
+                                      flex: 1,
+                                      padding: '8px',
+                                      borderRadius: '8px',
+                                      border: 'none',
+                                      backgroundColor: '#E3F2FD',
+                                      color: '#1565C0',
+                                      fontSize: '0.75rem',
+                                      fontWeight: '700',
+                                      cursor: 'pointer'
+                                    }}
+                                  >
+                                    ✅ Resolve
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'center' }}>
                 <NeumorphicButton 
@@ -933,6 +2142,393 @@ function App() {
                   Logout Admin View
                 </NeumorphicButton>
               </div>
+            </div>
+          )}
+
+          {/* REPORT SCREEN */}
+          {activeTab === 'report' && (
+            <div>
+              <header style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+                <button 
+                  onClick={() => {
+                    setActiveTab('home');
+                    setFormLocation('');
+                    setCapturedPhoto(null);
+                    setGeotagged(false);
+                    setIsGeotagging(false);
+                  }}
+                  style={{
+                    border: 'none',
+                    outline: 'none',
+                    width: '38px',
+                    height: '38px',
+                    borderRadius: '50%',
+                    backgroundColor: 'var(--bg-color)',
+                    boxShadow: 'var(--shadow-extruded-sm)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    color: 'var(--text-main)',
+                    transition: 'all 0.2s ease'
+                  }}
+                  onMouseDown={(e) => e.currentTarget.style.boxShadow = 'var(--shadow-pressed)'}
+                  onMouseUp={(e) => e.currentTarget.style.boxShadow = 'var(--shadow-extruded-sm)'}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="19" y1="12" x2="5" y2="12"></line>
+                    <polyline points="12 19 5 12 12 5"></polyline>
+                  </svg>
+                </button>
+                <h1 className="title-serif" style={{ fontSize: '1.8rem' }}>Report Issue</h1>
+              </header>
+
+              <NeumorphicCard padding="20px" style={{ marginBottom: '28px' }}>
+                <form onSubmit={handleAddIssue} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  <h3 style={{ fontSize: '1.1rem', marginBottom: '4px' }} className="title-serif">File a New Report</h3>
+                  
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <label style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-light)' }}>ISSUE TYPE</label>
+                    <select
+                      value={formTitle}
+                      onChange={(e) => {
+                        setFormTitle(e.target.value);
+                        setCapturedPhoto(null); // Reset snap if type changes
+                        setGeotagged(false);
+                        setIsGeotagging(false);
+                      }}
+                      style={{
+                        padding: '12px 16px',
+                        borderRadius: '14px',
+                        border: 'none',
+                        outline: 'none',
+                        backgroundColor: 'var(--bg-color)',
+                        boxShadow: 'var(--shadow-pressed)',
+                        fontFamily: 'Outfit, sans-serif',
+                        fontSize: '0.9rem',
+                        color: 'var(--text-main)',
+                        fontWeight: '500',
+                        appearance: 'none',
+                        backgroundImage: 'url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%235B856D\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'%3e%3cpolyline points=\'6 9 12 15 18 9\'%3e%3c/polyline%3e%3c/svg%3e")',
+                        backgroundRepeat: 'no-repeat',
+                        backgroundPosition: 'right 16px center',
+                        backgroundSize: '16px'
+                      }}
+                    >
+                      <option>Pothole</option>
+                      <option>Broken Streetlight</option>
+                      <option>Overflowing Garbage</option>
+                      <option>Blocked Drainage</option>
+                      <option>Other Issue</option>
+                    </select>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <label style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-light)' }}>SEVERITY LEVEL</label>
+                    <select
+                      value={formSeverity}
+                      onChange={(e) => setFormSeverity(e.target.value)}
+                      style={{
+                        padding: '12px 16px',
+                        borderRadius: '14px',
+                        border: 'none',
+                        outline: 'none',
+                        backgroundColor: 'var(--bg-color)',
+                        boxShadow: 'var(--shadow-pressed)',
+                        fontFamily: 'Outfit, sans-serif',
+                        fontSize: '0.9rem',
+                        color: 'var(--text-main)',
+                        fontWeight: '500',
+                        appearance: 'none',
+                        backgroundImage: 'url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%235B856D\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'%3e%3cpolyline points=\'6 9 12 15 18 9\'%3e%3c/polyline%3e%3c/svg%3e")',
+                        backgroundRepeat: 'no-repeat',
+                        backgroundPosition: 'right 16px center',
+                        backgroundSize: '16px'
+                      }}
+                    >
+                      <option>Low</option>
+                      <option>Medium</option>
+                      <option>High</option>
+                    </select>
+                  </div>
+
+                  {/* Interactive camera capture trigger in report form */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <label style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-light)' }}>CAPTURE PROOF</label>
+                    <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (capturedPhoto) {
+                            triggerGeotagging();
+                          } else {
+                            startCamera();
+                          }
+                        }}
+                        style={{
+                          width: '64px',
+                          height: '64px',
+                          borderRadius: '16px',
+                          border: 'none',
+                          outline: 'none',
+                          backgroundColor: 'var(--bg-color)',
+                          boxShadow: 'var(--shadow-extruded-sm)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: 'pointer',
+                          color: 'var(--accent-color)',
+                          overflow: 'hidden'
+                        }}
+                      >
+                        {capturedPhoto ? renderPhotoThumbnail(capturedPhoto) : <CameraIcon size={24} />}
+                      </button>
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ fontSize: '0.82rem', fontWeight: '600', color: capturedPhoto ? 'var(--text-main)' : 'var(--text-light)' }}>
+                          {capturedPhoto ? '📸 Photo captured!' : '📷 Tap square to take photo'}
+                        </span>
+                        {capturedPhoto && (
+                          <span style={{ fontSize: '0.72rem', color: 'var(--text-light)', marginTop: '2px' }}>
+                            (Tap photo again to geotag location)
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Geotagging status & animation panel */}
+                  {(isGeotagging || geotagged) && (
+                    <div style={{
+                      marginTop: '4px',
+                      padding: '16px',
+                      borderRadius: '20px',
+                      backgroundColor: 'var(--bg-color)',
+                      boxShadow: 'var(--shadow-pressed)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '10px',
+                      animation: 'fadeIn 0.3s ease'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{
+                          width: '12px',
+                          height: '12px',
+                          borderRadius: '50%',
+                          backgroundColor: isGeotagging ? 'var(--accent-color)' : '#2E7D32',
+                          boxShadow: isGeotagging ? '0 0 6px var(--accent-color)' : '0 0 6px #2E7D32',
+                          animation: isGeotagging ? 'pulse 1.2s infinite' : 'none'
+                        }} />
+                        <span style={{ fontSize: '0.85rem', fontWeight: '600', color: isGeotagging ? 'var(--text-main)' : '#2E7D32' }}>
+                          {isGeotagging ? 'Acquiring live GPS coordinates...' : '✓ GPS Location Geotagged'}
+                        </span>
+                      </div>
+                      
+                      {/* Map inside a rectangle */}
+                      <div style={{
+                        width: '100%',
+                        height: '110px',
+                        borderRadius: '16px',
+                        overflow: 'hidden',
+                        position: 'relative',
+                        border: '1.5px solid var(--shadow-dark)',
+                        backgroundColor: '#E5EFEA'
+                      }}>
+                        <svg width="100%" height="100%" viewBox="0 0 200 110">
+                          <rect width="100%" height="100%" fill="#E3ECE6" />
+                          <path d="M -10 40 L 210 55" stroke="#FFFFFF" strokeWidth="4" fill="none" />
+                          <path d="M 60 -10 L 80 120" stroke="#FFFFFF" strokeWidth="4" fill="none" />
+                          <path d="M 140 -10 L 120 120" stroke="#FFFFFF" strokeWidth="3" fill="none" />
+                          <path d="M -10 85 Q 100 80 210 90" stroke="#FFFFFF" strokeWidth="3" fill="none" />
+                          
+                          {/* Pulsing GPS Radar sweep */}
+                          {isGeotagging && (
+                            <circle cx="100" cy="55" r="30" fill="none" stroke="var(--accent-color)" strokeWidth="1.5" opacity="0.4">
+                              <animate attributeName="r" values="0;45" dur="1.8s" repeatCount="indefinite" />
+                              <animate attributeName="stroke-opacity" values="0.8;0" dur="1.8s" repeatCount="indefinite" />
+                            </circle>
+                          )}
+                          
+                          {/* Map Pin Locator */}
+                          <g>
+                            {isGeotagging ? (
+                              <circle cx="100" cy="55" r="6" fill="var(--accent-color)">
+                                <animate attributeName="r" values="4;8;4" dur="1.2s" repeatCount="indefinite" />
+                              </circle>
+                            ) : (
+                              <>
+                                <circle cx="100" cy="55" r="12" fill="#E53935" fillOpacity="0.25">
+                                  <animate attributeName="r" values="10;15;10" dur="2s" repeatCount="indefinite" />
+                                </circle>
+                                <path d="M100 45 C96 45 93 48 93 52 C93 56 100 65 100 65 C100 65 107 56 107 52 C107 48 104 45 100 45 Z" fill="#E53935" />
+                                <circle cx="100" cy="51" r="2.5" fill="#FFFFFF" />
+                              </>
+                            )}
+                          </g>
+                        </svg>
+                        
+                        {/* Laser Scanning Bar Overlay */}
+                        {isGeotagging && (
+                          <div style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            width: '100%',
+                            height: '4px',
+                            background: 'linear-gradient(to bottom, rgba(91,133,109,0.8), rgba(91,133,109,0))',
+                            boxShadow: '0 0 8px rgba(91,133,109,0.6)',
+                            animation: 'scanBar 1.5s ease-in-out infinite'
+                          }} />
+                        )}
+                      </div>
+                      
+                      {!isGeotagging && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '0.78rem', color: 'var(--text-light)' }}>
+                          <span><strong>Coordinates:</strong> 37.7749° N, 122.4194° W</span>
+                          <span><strong>Accuracy:</strong> Live GPS (~4m accuracy)</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <label style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-light)' }}>LOCATION</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 15 Maple Rd"
+                      value={formLocation}
+                      onChange={(e) => setFormLocation(e.target.value)}
+                      required
+                      style={{
+                        padding: '12px 16px',
+                        borderRadius: '14px',
+                        border: 'none',
+                        outline: 'none',
+                        backgroundColor: 'var(--bg-color)',
+                        boxShadow: 'var(--shadow-pressed)',
+                        fontFamily: 'Outfit, sans-serif',
+                        fontSize: '0.9rem',
+                        color: 'var(--text-main)',
+                        fontWeight: '500'
+                      }}
+                    />
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '12px', marginTop: '6px' }}>
+                    <NeumorphicButton type="submit" primary={true} style={{ flex: 1, padding: '12px' }}>
+                      Submit
+                    </NeumorphicButton>
+                    <NeumorphicButton 
+                      type="button" 
+                      onClick={() => {
+                        setActiveTab('home');
+                        setFormLocation('');
+                        setCapturedPhoto(null);
+                        setGeotagged(false);
+                        setIsGeotagging(false);
+                      }} 
+                      style={{ flex: 1, padding: '12px' }}
+                    >
+                      Cancel
+                    </NeumorphicButton>
+                  </div>
+                </form>
+              </NeumorphicCard>
+            </div>
+          )}
+
+          {/* ADMIN LOGIN SCREEN */}
+          {activeTab === 'admin-login' && (
+            <div>
+              <header style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+                <button 
+                  onClick={() => setActiveTab('home')}
+                  style={{
+                    border: 'none',
+                    outline: 'none',
+                    width: '38px',
+                    height: '38px',
+                    borderRadius: '50%',
+                    backgroundColor: 'var(--bg-color)',
+                    boxShadow: 'var(--shadow-extruded-sm)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    color: 'var(--text-main)',
+                    transition: 'all 0.2s ease'
+                  }}
+                  onMouseDown={(e) => e.currentTarget.style.boxShadow = 'var(--shadow-pressed)'}
+                  onMouseUp={(e) => e.currentTarget.style.boxShadow = 'var(--shadow-extruded-sm)'}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="19" y1="12" x2="5" y2="12"></line>
+                    <polyline points="12 19 5 12 12 5"></polyline>
+                  </svg>
+                </button>
+                <h1 className="title-serif" style={{ fontSize: '1.8rem' }}>Admin Gateway</h1>
+              </header>
+
+              <NeumorphicCard padding="24px">
+                <form onSubmit={handleAdminLoginSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <h3 className="title-serif" style={{ fontSize: '1.2rem', textAlign: 'center', marginBottom: '8px' }}>Sign in to Admin Dashboard</h3>
+                  
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <label style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-light)' }}>USERNAME</label>
+                    <input
+                      type="text"
+                      placeholder="Username"
+                      value={adminUsername}
+                      onChange={(e) => setAdminUsername(e.target.value)}
+                      required
+                      style={{
+                        padding: '12px 16px',
+                        borderRadius: '14px',
+                        border: 'none',
+                        outline: 'none',
+                        backgroundColor: 'var(--bg-color)',
+                        boxShadow: 'var(--shadow-pressed)',
+                        fontFamily: 'Outfit, sans-serif',
+                        color: 'var(--text-main)',
+                        fontWeight: '500'
+                      }}
+                    />
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <label style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-light)' }}>PASSWORD</label>
+                    <input
+                      type="password"
+                      placeholder="Password"
+                      value={adminPassword}
+                      onChange={(e) => setAdminPassword(e.target.value)}
+                      required
+                      style={{
+                        padding: '12px 16px',
+                        borderRadius: '14px',
+                        border: 'none',
+                        outline: 'none',
+                        backgroundColor: 'var(--bg-color)',
+                        boxShadow: 'var(--shadow-pressed)',
+                        fontFamily: 'Outfit, sans-serif',
+                        color: 'var(--text-main)',
+                        fontWeight: '500'
+                      }}
+                    />
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '12px', marginTop: '10px' }}>
+                    <NeumorphicButton type="submit" primary={true} style={{ flex: 1, padding: '12px' }}>
+                      Login
+                    </NeumorphicButton>
+                    <NeumorphicButton type="button" onClick={() => setActiveTab('home')} style={{ flex: 1, padding: '12px' }}>
+                      Cancel
+                    </NeumorphicButton>
+                  </div>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-light)', textAlign: 'center', marginTop: '4px' }}>
+                    Bypass Hint: Use <strong>admin</strong> / <strong>admin</strong>
+                  </p>
+                </form>
+              </NeumorphicCard>
             </div>
           )}
 
@@ -1077,7 +2673,7 @@ function App() {
           {activeTab === 'profile' && (
             <div>
               <header style={{ marginBottom: '24px' }}>
-                <h1 className="title-serif" style={{ fontSize: '1.8rem', textAlign: 'center' }}>Eco Profile</h1>
+                <h1 className="title-serif" style={{ fontSize: '1.8rem', textAlign: 'center' }}>Citizen Profile</h1>
               </header>
 
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '26px' }}>
@@ -1108,7 +2704,7 @@ function App() {
                   </div>
                 </div>
                 <h2 style={{ fontSize: '1.3rem', fontWeight: '700' }}>Alex Mercer</h2>
-                <p style={{ color: 'var(--text-light)', fontSize: '0.85rem', fontWeight: '600', marginTop: '2px' }}>COMMUNITY GUARDIAN • LVL 4</p>
+                <p style={{ color: 'var(--text-light)', fontSize: '0.85rem', fontWeight: '600', marginTop: '2px' }}>INFRASTRUCTURE MONITOR • LVL 4</p>
               </div>
 
               <NeumorphicCard padding="18px" style={{ marginBottom: '24px' }}>
@@ -1215,10 +2811,10 @@ function App() {
                 alignItems: 'center',
                 justifyContent: 'center'
               }}>
-                <LeafIcon size={20} fill="var(--accent-color)" stroke="var(--accent-color)" strokeWidth={1.8} opacity={1} />
+                <BeaconIcon size={20} fill="var(--accent-color)" stroke="var(--accent-color)" strokeWidth={1.8} opacity={1} />
               </div>
             ) : (
-              <LeafIcon size={20} fill="var(--text-light)" stroke="var(--text-light)" strokeWidth={1.8} opacity={0.6} />
+              <BeaconIcon size={20} fill="var(--text-light)" stroke="var(--text-light)" strokeWidth={1.8} opacity={0.6} />
             )}
           </button>
 
@@ -1315,9 +2911,50 @@ function App() {
         fontWeight: '600',
         letterSpacing: '0.2px'
       }}>
-        <LeafIcon size={18} fill="var(--accent-color)" stroke="var(--accent-color)" strokeWidth={1.8} opacity={1} />
-        <span>Eco-friendly Platform</span>
+        <BeaconIcon size={18} fill="var(--accent-color)" stroke="var(--accent-color)" strokeWidth={1.8} opacity={1} />
+        <span>InfraBeacon Platform</span>
       </footer>
+
+      {/* Fullscreen Image Modal Overlay */}
+      {activeImageModal && (
+        <div 
+          onClick={() => setActiveImageModal(null)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.95)',
+            zIndex: 2000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+            cursor: 'pointer',
+            animation: 'fadeIn 0.2s ease'
+          }}
+        >
+          <button 
+            onClick={() => setActiveImageModal(null)}
+            style={{
+              position: 'absolute',
+              top: '20px',
+              right: '20px',
+              color: 'white',
+              background: 'none',
+              border: 'none',
+              fontSize: '32px',
+              cursor: 'pointer'
+            }}
+          >
+            &times;
+          </button>
+          <div onClick={(e) => e.stopPropagation()} style={{ cursor: 'default' }}>
+            {renderLargePhoto(activeImageModal)}
+          </div>
+        </div>
+      )}
 
     </div>
   );

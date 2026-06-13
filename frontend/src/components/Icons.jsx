@@ -1,10 +1,17 @@
 import React from 'react';
 
-export const LeafIcon = ({ size = 24, fill = 'currentColor', stroke = 'currentColor', strokeWidth = 2, opacity = 1 }) => (
+export const BeaconIcon = ({ size = 24, fill = 'currentColor', stroke = 'currentColor', strokeWidth = 2, opacity = 1 }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M2 22C2.5 16 5.5 11.5 10 9C10 9 7.5 15.5 5 18" stroke={stroke} strokeWidth={strokeWidth} strokeLinecap="round" opacity={opacity}/>
-    <path d="M12 2C6.5 4 4 10.5 4 16C4 20 7 21 11 21C17.5 21 21 15 21 8C21 4 18 2 12 2Z" fill={fill} fillOpacity={opacity === 1 ? 0.25 : opacity} stroke={stroke} strokeWidth={strokeWidth} strokeLinejoin="round"/>
-    <path d="M12 2C13 7.5 11 13 4 16" stroke={stroke} strokeWidth={strokeWidth * 0.75} strokeLinecap="round" opacity={opacity}/>
+    {/* Base structure of the beacon */}
+    <path d="M12 22V12" stroke={stroke} strokeWidth={strokeWidth} strokeLinecap="round"/>
+    <path d="M17 22l-5-10-5 10" stroke={stroke} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"/>
+    {/* Glowing tip center */}
+    <circle cx="12" cy="11" r="3" fill={fill} fillOpacity={opacity === 1 ? 0.3 : opacity} stroke={stroke} strokeWidth={strokeWidth}/>
+    {/* Concentric transmission waves */}
+    <path d="M8.5 7.5c-2 2-2 5 0 7" stroke={stroke} strokeWidth={strokeWidth} strokeLinecap="round" opacity={opacity * 0.8}/>
+    <path d="M15.5 7.5c2 2 2 5 0 7" stroke={stroke} strokeWidth={strokeWidth} strokeLinecap="round" opacity={opacity * 0.8}/>
+    <path d="M5.5 4.5c-3.5 3.5-3.5 9.5 0 13" stroke={stroke} strokeWidth={strokeWidth} strokeLinecap="round" opacity={opacity * 0.4}/>
+    <path d="M18.5 4.5c3.5 3.5 3.5 9.5 0 13" stroke={stroke} strokeWidth={strokeWidth} strokeLinecap="round" opacity={opacity * 0.4}/>
   </svg>
 );
 
