@@ -39,3 +39,9 @@ htmlcov/
 *.db
 *.sqlite
 serviceAccountKey.json
+
+# Node / JS
+node_modules/
+frontend/node_modules/
+.vite/
+.eslintcache

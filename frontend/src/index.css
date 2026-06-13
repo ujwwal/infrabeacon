@@ -1,0 +1,82 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap');
+
+:root {
+  /* Eco-friendly Soft Neumorphic Theme */
+  --bg-color: #ECF3F0; /* Soft minty off-white */
+  --text-main: #2E3A34; /* Dark slate forest green */
+  --text-light: #6A7C73; /* Muted slate gray-green */
+  --accent-color: #5B856D; /* Sage green accent */
+  --accent-light: #D1E6DC; /* Soft mint/teal light background */
+  --accent-light-hover: #C2DDD1;
+  
+  /* Neumorphic Shadows (Extremely soft and smooth) */
+  --shadow-light: #FFFFFF;
+  --shadow-dark: #CFDAD2; /* Very soft greenish-gray shadow */
+  
+  --shadow-extruded: 10px 10px 20px var(--shadow-dark), -10px -10px 20px var(--shadow-light);
+  --shadow-extruded-sm: 5px 5px 10px var(--shadow-dark), -5px -5px 10px var(--shadow-light);
+  --shadow-pressed: inset 5px 5px 10px var(--shadow-dark), inset -5px -5px 10px var(--shadow-light);
+  --shadow-pressed-deep: inset 8px 8px 16px var(--shadow-dark), inset -8px -8px 16px var(--shadow-light);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Outfit', sans-serif;
+  background-color: var(--bg-color);
+  color: var(--text-main);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: 100vh;
+}
+
+/* Container for mobile mockup app - FIXED SIZE FOR CONSISTENCY */
+.app-container {
+  width: 410px;
+  height: 820px;
+  margin: 20px auto;
+  background-color: var(--bg-color);
+  border-radius: 44px;
+  box-shadow: 18px 18px 36px #c5cfc6, -18px -18px 36px #ffffff;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.scrollable-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 36px 24px 110px 24px; /* Bottom padding keeps content clear of the floating nav dock */
+}
+
+/* Serif font style from the mockup */
+.title-serif {
+  font-family: 'Playfair Display', serif;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+h1, h2, h3 {
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+/* Scrollbar styles */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--shadow-dark);
+  border-radius: 3px;
+}
